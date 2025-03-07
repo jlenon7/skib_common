@@ -1,0 +1,19 @@
+name: SkibCommon
+version: 1.0
+main: skibidilandia.SkibCommon
+api-version: 1.20
+description: Plugin principal do servidor Skibidilândia, adicionando comandos e funcionalidades personalizadas.
+commands:
+  g:
+    description: Envia uma mensagem global para todos os jogadores.
+    usage: /g <mensagem>
+  w:
+    description: Envia uma mensagem privada para outro jogador.
+    usage: /w <jogador> <mensagem>
+  tell:
+    description: Envia uma mensagem privada para outro jogador.
+    usage: /tell <jogador> <mensagem>
+  tpisland:
+    description: Teleporta para uma localização aleatória de uma das ilhas.
+    usage: /tpisland <ilha>
+
