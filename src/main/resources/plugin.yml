@@ -1,7 +1,7 @@
 name: SkibCommon
 version: 1.0
 main: skibidilandia.SkibCommon
-api-version: 1.20
+api-version: 26.1.2
 description: Plugin principal do servidor Skibidilândia, adicionando comandos e funcionalidades personalizadas.
 commands:
   g:
@@ -16,4 +16,13 @@ commands:
   tpisland:
     description: Teleporta para uma localização aleatória de uma das ilhas.
     usage: /tpisland <ilha>
+  minerador:
+    description: (Admin) Entrega uma mineradora automática de um nível.
+    usage: /minerador dar <1-6> [jogador]
+    permission: skib.miner.admin
+  blueprint:
+    description: Cria e gera construções a partir de blueprints.
+    usage: /blueprint <varinha|criar <nome>>
+    aliases: [bp]
+    permission: skib.blueprint.admin
 
