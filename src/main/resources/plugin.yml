@@ -25,4 +25,24 @@ commands:
     usage: /blueprint <varinha|criar <nome>>
     aliases: [bp]
     permission: skib.blueprint.admin
+  furnacetool:
+    description: (Admin) Entrega uma ferramenta da fornalha (auto-fundição).
+    usage: /furnacetool dar <picareta|machado|pa> [jogador]
+    aliases: [ft]
+    permission: skib.furnacetools.admin
+  fuckbedrocks:
+    description: (Admin) Entrega a Picareta Quebra-Bedrock, o TNT Nuclear ou o Carrinho com TNT Nuclear.
+    usage: /fuckbedrocks dar <picareta|tnt|carrinho> [jogador] [quantidade]
+    aliases: [fb]
+    permission: skib.fuckbedrocks.admin
+  tnttools:
+    description: (Admin) Entrega a Espada TNT ou as peças da Armadura TNT.
+    usage: /tnttools dar <espada|capacete|peitoral|calca|bota|armadura> [jogador]
+    aliases: [tt]
+    permission: skib.tnttools.admin
+  minemagic:
+    description: (Admin) Entrega o Cajado de Fogo ou o Cajado do Necromante.
+    usage: /minemagic dar <cajadofogo|cajadonecromante> [jogador]
+    aliases: [mm]
+    permission: skib.minemagic.admin
 
