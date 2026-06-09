@@ -41,8 +41,8 @@ commands:
     aliases: [tt]
     permission: skib.tnttools.admin
   minemagic:
-    description: (Admin) Entrega o Cajado de Fogo ou o Cajado do Necromante.
-    usage: /minemagic dar <cajadofogo|cajadonecromante> [jogador]
+    description: (Admin) Entrega os itens mágicos (Cajados de Fogo, Necromante, Raio, Elfo Negro, Gravidade, Cura, o Arco Élfico, o Arco do Elfo Negro ou o Mjolnir).
+    usage: /minemagic dar <cajadofogo|cajadonecromante|cajadoraio|cajadoelfo|cajadogravidade|cajadocura|arcoelfico|arcoelfonegro|mjolnir> [jogador]
     aliases: [mm]
     permission: skib.minemagic.admin
 

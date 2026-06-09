@@ -23,6 +23,13 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
     private final JavaPlugin plugin;
     private FireStaffListeners fireStaffListeners;
     private NecromancerListeners necromancerListeners;
+    private LightningStaffListeners lightningStaffListeners;
+    private DarkElfListeners darkElfListeners;
+    private GravityStaffListeners gravityStaffListeners;
+    private HealStaffListeners healStaffListeners;
+    private ElfBowListeners elfBowListeners;
+    private DarkElfBowListeners darkElfBowListeners;
+    private MjolnirListeners mjolnirListeners;
 
     public MineMagicPlugin(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -33,8 +40,22 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
 
         fireStaffListeners = new FireStaffListeners(plugin);
         necromancerListeners = new NecromancerListeners(plugin);
+        lightningStaffListeners = new LightningStaffListeners(plugin);
+        darkElfListeners = new DarkElfListeners(plugin);
+        gravityStaffListeners = new GravityStaffListeners(plugin);
+        healStaffListeners = new HealStaffListeners(plugin);
+        elfBowListeners = new ElfBowListeners(plugin);
+        darkElfBowListeners = new DarkElfBowListeners(plugin);
+        mjolnirListeners = new MjolnirListeners(plugin);
         plugin.getServer().getPluginManager().registerEvents(fireStaffListeners, plugin);
         plugin.getServer().getPluginManager().registerEvents(necromancerListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(lightningStaffListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(darkElfListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(gravityStaffListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(healStaffListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(elfBowListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(darkElfBowListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(mjolnirListeners, plugin);
         necromancerListeners.start();
 
         if (plugin.getCommand("minemagic") != null) {
@@ -51,6 +72,27 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
         if (necromancerListeners != null) {
             necromancerListeners.shutdown();
         }
+        if (lightningStaffListeners != null) {
+            lightningStaffListeners.shutdown();
+        }
+        if (darkElfListeners != null) {
+            darkElfListeners.shutdown();
+        }
+        if (gravityStaffListeners != null) {
+            gravityStaffListeners.shutdown();
+        }
+        if (healStaffListeners != null) {
+            healStaffListeners.shutdown();
+        }
+        if (elfBowListeners != null) {
+            elfBowListeners.shutdown();
+        }
+        if (darkElfBowListeners != null) {
+            darkElfBowListeners.shutdown();
+        }
+        if (mjolnirListeners != null) {
+            mjolnirListeners.shutdown();
+        }
     }
 
     @Override
@@ -60,7 +102,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
             return true;
         }
         if (args.length < 2 || !args[0].equalsIgnoreCase("dar")) {
-            sender.sendMessage(ChatColor.YELLOW + "Uso: /minemagic dar <cajadofogo|cajadonecromante> [jogador]");
+            sender.sendMessage(ChatColor.YELLOW + "Uso: /minemagic dar <cajadofogo|cajadonecromante|cajadoraio|cajadoelfo|cajadogravidade|cajadocura|arcoelfico|arcoelfonegro|mjolnir> [jogador]");
             return true;
         }
 
@@ -80,7 +122,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
 
         ItemStack item = build(args[1]);
         if (item == null) {
-            sender.sendMessage(ChatColor.RED + "Item inválido. Use: cajadofogo ou cajadonecromante.");
+            sender.sendMessage(ChatColor.RED + "Item inválido. Use: cajadofogo, cajadonecromante, cajadoraio, cajadoelfo, cajadogravidade, cajadocura, arcoelfico, arcoelfonegro ou mjolnir.");
             return true;
         }
 
@@ -103,6 +145,42 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
             case "necrostaff":
             case "necro":
                 return MineMagicItems.createNecromancerStaff();
+            case "cajadoraio":
+            case "raio":
+            case "lightningstaff":
+            case "lightning":
+                return MineMagicItems.createLightningStaff();
+            case "cajadoelfo":
+            case "elfo":
+            case "elfonegro":
+            case "darkelfstaff":
+            case "darkelf":
+                return MineMagicItems.createDarkElfStaff();
+            case "cajadogravidade":
+            case "gravidade":
+            case "gravitystaff":
+            case "gravity":
+                return MineMagicItems.createGravityStaff();
+            case "cajadocura":
+            case "cura":
+            case "healstaff":
+            case "heal":
+                return MineMagicItems.createHealStaff();
+            case "arcoelfico":
+            case "arco":
+            case "elfbow":
+            case "elf":
+                return MineMagicItems.createElfBow();
+            case "arcoelfonegro":
+            case "arconegro":
+            case "darkelfbow":
+            case "arcoelfo":
+                return MineMagicItems.createDarkElfBow();
+            case "mjolnir":
+            case "martelo":
+            case "hammer":
+            case "thor":
+                return MineMagicItems.createMjolnir();
             default:
                 return null;
         }
@@ -114,7 +192,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
             return filter(Arrays.asList("dar"), args[0]);
         }
         if (args.length == 2) {
-            return filter(Arrays.asList("cajadofogo", "cajadonecromante"), args[1]);
+            return filter(Arrays.asList("cajadofogo", "cajadonecromante", "cajadoraio", "cajadoelfo", "cajadogravidade", "cajadocura", "arcoelfico", "arcoelfonegro", "mjolnir"), args[1]);
         }
         if (args.length == 3) {
             List<String> names = new ArrayList<>();
