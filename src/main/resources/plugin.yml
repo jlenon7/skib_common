@@ -20,6 +20,10 @@ commands:
     description: (Admin) Entrega uma mineradora automática de um nível.
     usage: /minerador dar <1-6> [jogador]
     permission: skib.miner.admin
+  maquina:
+    description: (Admin) Entrega uma máquina auxiliar (colhetadeira ou compactadora).
+    usage: /maquina dar <colhetadeira|compactadora> [jogador]
+    permission: skib.miner.admin
   blueprint:
     description: Cria e gera construções a partir de blueprints.
     usage: /blueprint <varinha|criar <nome>>
@@ -36,13 +40,20 @@ commands:
     aliases: [fb]
     permission: skib.fuckbedrocks.admin
   tnttools:
-    description: (Admin) Entrega a Espada TNT ou as peças da Armadura TNT.
-    usage: /tnttools dar <espada|capacete|peitoral|calca|bota|armadura> [jogador]
+    description: (Admin) Entrega as peças da Armadura TNT.
+    usage: /tnttools dar <capacete|peitoral|calca|bota|armadura> [jogador]
     aliases: [tt]
     permission: skib.tnttools.admin
   minemagic:
-    description: (Admin) Entrega os itens mágicos (Cajados de Fogo, Necromante, Raio, Elfo Negro, Gravidade, Cura, o Arco Élfico, o Arco do Elfo Negro ou o Mjolnir).
-    usage: /minemagic dar <cajadofogo|cajadonecromante|cajadoraio|cajadoelfo|cajadogravidade|cajadocura|arcoelfico|arcoelfonegro|mjolnir> [jogador]
+    description: (Admin) Entrega os itens mágicos e gerencia as almas do Cajado do Necromante.
+    usage: |-
+      /minemagic dar <cajadomago|cajadocurandeiro|cajadonecromante|arcoelfo|mjolnir|espadaguerreiro|adagas> [jogador]
+      /minemagic souls <add <tipo> <quantidade>|clear|list> [jogador]
     aliases: [mm]
     permission: skib.minemagic.admin
+  enchants:
+    description: (Admin) Entrega o Livro Encantado de Hexa (picareta/pá, quebra 3x3).
+    usage: /enchants dar hexa [jogador] [quantidade]
+    aliases: [ench]
+    permission: skib.enchants.admin
 

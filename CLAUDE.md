@@ -30,7 +30,7 @@ servidor ou reload). Confirme que o jar foi de fato atualizado conferindo o time
 ## Padrão dos itens mágicos (`minemagic/`)
 
 Itens são identificados por uma chave no PDC (sobrevive a soltar/pegar/encantar), nunca pelo
-nome/lore. Para adicionar um item novo, siga o que já existe (ex.: o Arco Élfico):
+nome/lore. Para adicionar um item novo, siga o que já existe (ex.: o Arco do Elfo):
 
 1. `MineMagicItems.java` — adicione `Material`, um `NamespacedKey` (inicializado em `init`),
    um `createX()` (display name, lore, flags, grava a chave no PDC) e um `isX(ItemStack)`.

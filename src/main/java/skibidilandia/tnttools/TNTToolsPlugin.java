@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * Liga o sistema TNTTools: registra os itens, o listener e o comando admin para
- * entregar a Espada TNT e as peças da Armadura TNT.
+ * entregar as peças da Armadura TNT.
  */
 public class TNTToolsPlugin implements CommandExecutor, TabCompleter {
 
@@ -46,7 +46,7 @@ public class TNTToolsPlugin implements CommandExecutor, TabCompleter {
         }
         if (args.length < 2 || !args[0].equalsIgnoreCase("dar")) {
             sender.sendMessage(ChatColor.YELLOW
-                    + "Uso: /tnttools dar <espada|capacete|peitoral|calca|bota|armadura> [jogador]");
+                    + "Uso: /tnttools dar <capacete|peitoral|calca|bota|armadura> [jogador]");
             return true;
         }
 
@@ -67,7 +67,7 @@ public class TNTToolsPlugin implements CommandExecutor, TabCompleter {
         List<ItemStack> items = build(args[1]);
         if (items == null) {
             sender.sendMessage(ChatColor.RED
-                    + "Item inválido. Use: espada, capacete, peitoral, calca, bota ou armadura.");
+                    + "Item inválido. Use: capacete, peitoral, calca, bota ou armadura.");
             return true;
         }
 
@@ -82,9 +82,6 @@ public class TNTToolsPlugin implements CommandExecutor, TabCompleter {
     /** Constrói o(s) item(ns) pedido(s), ou null se o argumento for inválido. */
     private static List<ItemStack> build(String arg) {
         switch (arg.toLowerCase()) {
-            case "espada":
-            case "sword":
-                return Arrays.asList(TNTToolsItems.createSword());
             case "capacete":
             case "helmet":
                 return Arrays.asList(TNTToolsItems.createArmorPiece(TNTToolsItems.HELMET_MATERIAL));

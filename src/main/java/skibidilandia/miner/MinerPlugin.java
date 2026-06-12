@@ -21,6 +21,9 @@ public class MinerPlugin implements CommandExecutor {
     private GenerationTask generationTask;
     private BukkitRunnable autosaveTask;
 
+    private MachineRegistry machineRegistry;
+    private MachineTask machineTask;
+
     public MinerPlugin(JavaPlugin plugin) {
         this.plugin = plugin;
     }
@@ -36,10 +39,19 @@ public class MinerPlugin implements CommandExecutor {
         generationTask = new GenerationTask(registry);
         generationTask.runTaskTimer(plugin, 20L, 20L);
 
+        // Máquinas auxiliares (colhetadeira / compactadora) — reusam a infra da mineradora.
+        MachineItems.init(plugin);
+        machineRegistry = new MachineRegistry(plugin);
+        machineRegistry.load();
+        plugin.getServer().getPluginManager().registerEvents(new MachineListeners(machineRegistry), plugin);
+        machineTask = new MachineTask(machineRegistry, registry);
+        machineTask.runTaskTimer(plugin, 20L, 20L);
+
         autosaveTask = new BukkitRunnable() {
             @Override
             public void run() {
                 registry.save();
+                machineRegistry.save();
             }
         };
         autosaveTask.runTaskTimer(plugin, AUTOSAVE_TICKS, AUTOSAVE_TICKS);
@@ -47,17 +59,28 @@ public class MinerPlugin implements CommandExecutor {
         if (plugin.getCommand("minerador") != null) {
             plugin.getCommand("minerador").setExecutor(this);
         }
+        if (plugin.getCommand("maquina") != null) {
+            MachineCommand machineCommand = new MachineCommand();
+            plugin.getCommand("maquina").setExecutor(machineCommand);
+            plugin.getCommand("maquina").setTabCompleter(machineCommand);
+        }
     }
 
     public void shutdown() {
         if (generationTask != null) {
             generationTask.cancel();
         }
+        if (machineTask != null) {
+            machineTask.cancel();
+        }
         if (autosaveTask != null) {
             autosaveTask.cancel();
         }
         if (registry != null) {
             registry.save();
+        }
+        if (machineRegistry != null) {
+            machineRegistry.save();
         }
     }
 

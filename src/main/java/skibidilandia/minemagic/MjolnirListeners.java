@@ -1,16 +1,22 @@
 package skibidilandia.minemagic;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.World;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
@@ -59,15 +65,23 @@ public class MjolnirListeners implements Listener {
     private static final double HIT_SIZE = 0.6D;
     /** Distância (blocos) do dono para considerar o martelo "de volta à mão". */
     private static final double CATCH_DISTANCE = 1.6D;
-    /** Dano causado ao alvo atingido pelo martelo arremessado. */
-    private static final double IMPACT_DAMAGE = 10.0D;
+    /** Dano (capado) aplicado a quem estiver perto do ponto de impacto. 3 corações. */
+    private static final double IMPACT_DAMAGE = 6.0D;
+    /** Raio (blocos) em que o impacto aplica o dano capado. */
+    private static final double IMPACT_RADIUS = 4.0D;
     /** Espaçamento (blocos) entre faíscas ao longo da trilha. */
     private static final double TRAIL_STEP = 0.3D;
+    /** Cooldown (ms) entre arremessos. */
+    private static final long THROW_COOLDOWN_MS = 3_000L;
 
     private final JavaPlugin plugin;
 
     /** Jogadores com um martelo em voo. */
     private final Map<UUID, ThrownHammer> inFlight = new HashMap<>();
+    /** Fim do cooldown do arremesso (ms epoch), por jogador. */
+    private final Map<UUID, Long> throwCooldown = new HashMap<>();
+    /** True enquanto a explosão controlada do impacto roda (suprime o dano bruto dela). */
+    private boolean suppressExplosionDamage = false;
 
     public MjolnirListeners(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -90,17 +104,33 @@ public class MjolnirListeners implements Listener {
             return;
         }
         event.setCancelled(true);
-        ThrownHammer flying = inFlight.get(player.getUniqueId());
+        UUID id = player.getUniqueId();
+        ThrownHammer flying = inFlight.get(id);
         if (flying != null) {
             flying.recall(); // já há um martelo em voo: chama de volta imediatamente
             return;
         }
+        long now = System.currentTimeMillis();
+        Long until = throwCooldown.get(id);
+        if (until != null && now < until) {
+            sendCooldown(player, until - now);
+            return;
+        }
+        throwCooldown.put(id, now + THROW_COOLDOWN_MS);
         throwHammer(player);
+    }
+
+    /** Aviso de recarga na action bar. */
+    private void sendCooldown(Player player, long remainingMs) {
+        player.sendActionBar(Component.text("Recarregando... ", NamedTextColor.RED)
+                .append(Component.text(String.format("%.1fs", remainingMs / 1000.0), NamedTextColor.WHITE)));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
     }
 
     /** Tira o martelo da mão e inicia o voo. */
     private void throwHammer(Player player) {
         ItemStack hand = player.getInventory().getItemInMainHand();
+        int slot = player.getInventory().getHeldItemSlot();
         ItemStack thrown = MineMagicItems.createMjolnir();
         hand.setAmount(hand.getAmount() - 1);
         player.getInventory().setItemInMainHand(hand.getAmount() <= 0 ? null : hand);
@@ -113,7 +143,8 @@ public class MjolnirListeners implements Listener {
                 player.getUniqueId(),
                 eye.clone().add(dir.clone().multiply(0.8)),
                 dir.clone().multiply(OUTBOUND_SPEED),
-                thrown);
+                thrown,
+                slot);
         inFlight.put(player.getUniqueId(), hammer);
         hammer.runTaskTimer(plugin, 1L, 1L);
     }
@@ -137,6 +168,19 @@ public class MjolnirListeners implements Listener {
         event.getEntity().getWorld().strikeLightning(event.getEntity().getLocation());
     }
 
+    /** Cancela o dano bruto da explosão do impacto (o dano real é aplicado capado à parte). */
+    @EventHandler(ignoreCancelled = true)
+    public void onExplosionDamage(EntityDamageEvent event) {
+        if (!suppressExplosionDamage) {
+            return;
+        }
+        EntityDamageEvent.DamageCause cause = event.getCause();
+        if (cause == EntityDamageEvent.DamageCause.BLOCK_EXPLOSION
+                || cause == EntityDamageEvent.DamageCause.ENTITY_EXPLOSION) {
+            event.setCancelled(true);
+        }
+    }
+
     // =========================================================================
     //  Projétil
     // =========================================================================
@@ -147,15 +191,17 @@ public class MjolnirListeners implements Listener {
         private final UUID ownerId;
         private final ItemStack thrown;
         private final Vector velocity;
+        private final int originSlot;
         private Location current;
         private boolean returning = false;
         private double travelled = 0.0D;
 
-        ThrownHammer(UUID ownerId, Location start, Vector velocity, ItemStack thrown) {
+        ThrownHammer(UUID ownerId, Location start, Vector velocity, ItemStack thrown, int originSlot) {
             this.ownerId = ownerId;
             this.current = start;
             this.velocity = velocity;
             this.thrown = thrown;
+            this.originSlot = originSlot;
         }
 
         /** Faz o martelo voltar imediatamente (chamado pelo recall). */
@@ -172,6 +218,13 @@ public class MjolnirListeners implements Listener {
                 finish(null);
                 return;
             }
+            // Dono mudou de mundo (portal, /tp): perseguir as coordenadas dele em
+            // outro mundo faria o martelo voar para sempre. Devolve na hora.
+            if (!owner.getWorld().equals(current.getWorld())) {
+                giveBack(owner, thrown, originSlot);
+                finish(owner);
+                return;
+            }
 
             if (!returning) {
                 World world = current.getWorld();
@@ -184,8 +237,7 @@ public class MjolnirListeners implements Listener {
                     LivingEntity target = (LivingEntity) hit.getHitEntity();
                     trail(current, target.getLocation());
                     current = target.getLocation();
-                    target.damage(IMPACT_DAMAGE, owner);
-                    impactEffect(world, current, owner);
+                    impactEffect(world, current, owner); // aplica o dano capado na área (inclui o alvo)
                     returning = true;
                 } else if (hit != null && hit.getHitBlock() != null) {
                     Vector p = hit.getHitPosition();
@@ -210,7 +262,7 @@ public class MjolnirListeners implements Listener {
             Location goal = owner.getLocation().add(0, 1.0, 0);
             Vector toOwner = goal.toVector().subtract(current.toVector());
             if (toOwner.length() <= CATCH_DISTANCE) {
-                giveBack(owner, thrown);
+                giveBack(owner, thrown, originSlot);
                 finish(owner);
                 return;
             }
@@ -229,15 +281,30 @@ public class MjolnirListeners implements Listener {
     }
 
     /**
-     * Efeito do impacto do martelo arremessado: três raios em volta do ponto e
-     * uma explosão de TNT no local. Usado só no arremesso (o golpe corpo a corpo
-     * continua invocando um único raio).
+     * Efeito do impacto do martelo arremessado: três raios (apenas visuais) em
+     * volta do ponto e uma explosão de TNT no local que ainda quebra blocos, mas
+     * cujo dano bruto é suprimido. No lugar dele, aplica-se um dano capado de
+     * {@link #IMPACT_DAMAGE} (3 corações) a quem estiver dentro de
+     * {@link #IMPACT_RADIUS}, poupando o dono. Usado só no arremesso (o golpe
+     * corpo a corpo continua invocando um único raio de verdade).
      */
     private void impactEffect(World world, Location loc, Player owner) {
-        world.strikeLightning(loc);
-        world.strikeLightning(loc.clone().add(1.5, 0, 1.5));
-        world.strikeLightning(loc.clone().add(-1.5, 0, -1.5));
-        world.createExplosion(loc, 4.0F, false, true, owner);
+        world.strikeLightningEffect(loc);
+        world.strikeLightningEffect(loc.clone().add(1.5, 0, 1.5));
+        world.strikeLightningEffect(loc.clone().add(-1.5, 0, -1.5));
+
+        suppressExplosionDamage = true;
+        try {
+            world.createExplosion(loc, 4.0F, false, true, owner);
+        } finally {
+            suppressExplosionDamage = false;
+        }
+
+        for (Entity nearby : world.getNearbyEntities(loc, IMPACT_RADIUS, IMPACT_RADIUS, IMPACT_RADIUS)) {
+            if (nearby instanceof LivingEntity && !nearby.equals(owner)) {
+                ((LivingEntity) nearby).damage(IMPACT_DAMAGE, owner);
+            }
+        }
     }
 
     /** Desenha uma trilha contínua e densa de faíscas elétricas entre dois pontos. */
@@ -258,18 +325,40 @@ public class MjolnirListeners implements Listener {
         world.spawnParticle(Particle.END_ROD, to, 1, 0.0, 0.0, 0.0, 0.0);
     }
 
-    /** Devolve o Mjolnir ao inventário do dono (ou o larga aos pés se cheio). */
-    private void giveBack(Player owner, ItemStack thrown) {
+    /**
+     * Devolve o Mjolnir ao inventário do dono. Tenta o slot de onde ele foi
+     * arremessado; se esse slot já estiver ocupado, cai no primeiro slot livre
+     * ({@code addItem}); se o inventário estiver cheio, larga aos pés.
+     */
+    private void giveBack(Player owner, ItemStack thrown, int originSlot) {
+        ItemStack atOrigin = owner.getInventory().getItem(originSlot);
+        if (atOrigin == null || atOrigin.getType() == Material.AIR) {
+            owner.getInventory().setItem(originSlot, thrown);
+            return;
+        }
         Map<Integer, ItemStack> overflow = owner.getInventory().addItem(thrown);
         for (ItemStack leftover : overflow.values()) {
             owner.getWorld().dropItemNaturally(owner.getLocation(), leftover);
         }
     }
 
-    /** Cancela todos os voos em curso (chamado no desligamento). */
+    /**
+     * Cancela todos os voos em curso e <b>devolve o martelo</b> (chamado no
+     * desligamento/reload). Sem isso, um martelo em voo no momento do restart
+     * sumia para sempre: ele já saíra da mão no arremesso e a tarefa era só
+     * cancelada. Com o dono online, o item volta ao inventário (persiste no save
+     * que ocorre logo depois); offline, cai no chão onde estava voando.
+     */
     public void shutdown() {
         for (Iterator<ThrownHammer> it = inFlight.values().iterator(); it.hasNext(); ) {
-            it.next().cancel();
+            ThrownHammer hammer = it.next();
+            hammer.cancel();
+            Player owner = plugin.getServer().getPlayer(hammer.ownerId);
+            if (owner != null && owner.isOnline()) {
+                giveBack(owner, hammer.thrown, hammer.originSlot);
+            } else {
+                hammer.current.getWorld().dropItemNaturally(hammer.current, hammer.thrown);
+            }
             it.remove();
         }
     }

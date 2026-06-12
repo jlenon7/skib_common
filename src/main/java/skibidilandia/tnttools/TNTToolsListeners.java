@@ -10,7 +10,6 @@ import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.PrepareAnvilEvent;
@@ -31,18 +30,13 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Comportamento dos itens do TNTTools.
  *
- * Espada TNT:
- *  - Ao acertar uma entidade, gera explosões na posição do alvo. A quantidade é
- *    {@code max(1, nível de Pilhagem)} — Pilhagem II = 2, Pilhagem III = 3. O
- *    portador da espada é blindado contra a própria explosão.
- *
  * Armadura TNT:
  *  - Agachar duas vezes rapidamente (shift duplo) dispara 1 explosão por peça da
  *    armadura vestida (conjunto completo = 4). O dono não é ferido. Usamos shift
  *    duplo (e não um único agachar) porque agachar é comum demais e dispararia
  *    explosões sem querer. Há um cooldown curto para evitar spam.
  *
- * Conserto (espada e armadura):
+ * Conserto (armadura):
  *  - Só na bigorna, com 1 Cristal do End. Restaura 10% da durabilidade máxima e
  *    custa exatamente 10 níveis de XP. O preço e o consumo são tratados na mão.
  *
@@ -83,35 +77,6 @@ public class TNTToolsListeners implements Listener {
 
     public TNTToolsListeners(JavaPlugin plugin) {
         this.plugin = plugin;
-    }
-
-    // =========================================================================
-    //  Espada TNT
-    // =========================================================================
-
-    @EventHandler(ignoreCancelled = true)
-    public void onSwordHit(EntityDamageByEntityEvent event) {
-        // Só um golpe de verdade (melee/varredura) deve explodir. Sem este
-        // filtro, o dano da PRÓPRIA explosão — atribuído ao jogador como fonte —
-        // re-dispara este handler e causa recursão infinita (StackOverflow).
-        EntityDamageEvent.DamageCause cause = event.getCause();
-        if (cause != EntityDamageEvent.DamageCause.ENTITY_ATTACK
-                && cause != EntityDamageEvent.DamageCause.ENTITY_SWEEP_ATTACK) {
-            return;
-        }
-        if (!(event.getDamager() instanceof Player)) {
-            return;
-        }
-        Player player = (Player) event.getDamager();
-        ItemStack weapon = player.getInventory().getItemInMainHand();
-        if (!TNTToolsItems.isTntSword(weapon)) {
-            return;
-        }
-        int looting = weapon.getEnchantmentLevel(Enchantment.LOOTING);
-        int count = Math.max(1, looting);
-        // centraliza a explosão no corpo do alvo
-        Location at = event.getEntity().getLocation().add(0, 1, 0);
-        explodeProtectingOwner(player, at, count);
     }
 
     // =========================================================================

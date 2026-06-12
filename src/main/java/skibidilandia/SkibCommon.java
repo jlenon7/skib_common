@@ -3,6 +3,7 @@ package skibidilandia;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import skibidilandia.blueprint.BlueprintPlugin;
+import skibidilandia.enchants.EnchantsPlugin;
 import skibidilandia.fuckbedrocks.FuckBedrocksPlugin;
 import skibidilandia.furnacetools.FurnaceToolsPlugin;
 import skibidilandia.minemagic.MineMagicPlugin;
@@ -36,6 +37,9 @@ public class SkibCommon extends JavaPlugin {
 
         mineMagicPlugin = new MineMagicPlugin(this);
         mineMagicPlugin.register();
+
+        EnchantsPlugin enchantsPlugin = new EnchantsPlugin(this);
+        enchantsPlugin.register();
     }
 
     @Override

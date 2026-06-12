@@ -16,10 +16,6 @@ import java.util.List;
 /**
  * Cria e identifica os itens do plugin TNTTools:
  *
- *  - {@code Espada TNT}: base de diamante. Ao acertar um alvo gera uma explosão
- *    (ou várias, conforme o nível de Pilhagem/Looting). A explosão não fere o
- *    portador da espada, só quem estiver por perto.
- *
  *  - {@code Armadura TNT}: 4 peças de couro tingidas de vermelho. Cada peça
  *    vestida permite ao jogador disparar 1 explosão usando a tecla de troca de
  *    mão (configurável para "C"). Conjunto completo = 4 explosões. As explosões
@@ -31,8 +27,6 @@ import java.util.List;
  */
 public final class TNTToolsItems {
 
-    public static final Material SWORD_MATERIAL = Material.GOLDEN_SWORD;
-
     public static final Material HELMET_MATERIAL = Material.LEATHER_HELMET;
     public static final Material CHESTPLATE_MATERIAL = Material.LEATHER_CHESTPLATE;
     public static final Material LEGGINGS_MATERIAL = Material.LEATHER_LEGGINGS;
@@ -41,45 +35,13 @@ public final class TNTToolsItems {
     /** Vermelho "TNT" para tingir as peças de couro. */
     private static final Color TNT_RED = Color.fromRGB(0xD3, 0x2F, 0x2F);
 
-    private static NamespacedKey swordKey;
     private static NamespacedKey armorKey;
 
     private TNTToolsItems() {
     }
 
     public static void init(JavaPlugin plugin) {
-        swordKey = new NamespacedKey(plugin, "tnt_sword");
         armorKey = new NamespacedKey(plugin, "tnt_armor");
-    }
-
-    // =========================================================================
-    //  Espada TNT
-    // =========================================================================
-
-    /** Constrói a Espada TNT (base de diamante, sem encantos). */
-    public static ItemStack createSword() {
-        ItemStack item = new ItemStack(SWORD_MATERIAL);
-        ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(ChatColor.RED + "" + ChatColor.BOLD + "Espada TNT");
-        meta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Causa uma " + ChatColor.RED + "explosão" + ChatColor.GRAY + " ao acertar um alvo.",
-                ChatColor.GRAY + "A explosão " + ChatColor.WHITE + "não fere você" + ChatColor.GRAY + ", só quem está por perto.",
-                ChatColor.GRAY + "Pilhagem " + ChatColor.WHITE + "II" + ChatColor.GRAY + " = 2 explosões, "
-                        + ChatColor.WHITE + "III" + ChatColor.GRAY + " = 3 explosões.",
-                "",
-                repairLoreLine()
-        ));
-        meta.getPersistentDataContainer().set(swordKey, PersistentDataType.BYTE, (byte) 1);
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    /** True se o item for a Espada TNT. */
-    public static boolean isTntSword(ItemStack item) {
-        if (item == null || item.getType() != SWORD_MATERIAL || !item.hasItemMeta()) {
-            return false;
-        }
-        return item.getItemMeta().getPersistentDataContainer().has(swordKey, PersistentDataType.BYTE);
     }
 
     // =========================================================================
@@ -138,9 +100,9 @@ public final class TNTToolsItems {
         return item.getItemMeta().getPersistentDataContainer().has(armorKey, PersistentDataType.BYTE);
     }
 
-    /** True para qualquer item do TNTTools (espada ou peça de armadura). */
+    /** True para qualquer item do TNTTools (peça de armadura). */
     public static boolean isTntTool(ItemStack item) {
-        return isTntSword(item) || isTntArmor(item);
+        return isTntArmor(item);
     }
 
     private static String repairLoreLine() {
