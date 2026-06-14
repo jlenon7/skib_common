@@ -142,6 +142,10 @@ public class MageStaffListeners implements Listener {
         }
         // Salto direto (tecla 1-4): mantém o cajado selecionado.
         event.setCancelled(true);
+        if (!MineMagicItems.isAbilityUnlocked(staff, slot)) {
+            notifyLocked(player, staff, slot);
+            return;
+        }
         if (slot == 3) {
             // Tecla 4 — Levitar: ação instantânea com recarga; não muda o modo do
             // cajado, então o jogador já cai de volta podendo disparar fogo/raio.
@@ -175,6 +179,14 @@ public class MageStaffListeners implements Listener {
             case MineMagicItems.MAGE_FREEZE:    return "Congelar";
             default:                            return "Fogo";
         }
+    }
+
+    /** Avisa que a habilidade da tecla {@code slot+1} ainda está bloqueada. */
+    private void notifyLocked(Player player, ItemStack item, int slot) {
+        player.sendActionBar(Component.text("Tecla " + (slot + 1) + " bloqueada ("
+                + MineMagicItems.abilityName(item, slot) + ") — funda uma Gema do Infinito na Forja.",
+                NamedTextColor.RED));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
     }
 
     /**

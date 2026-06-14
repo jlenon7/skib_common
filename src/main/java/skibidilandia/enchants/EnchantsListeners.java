@@ -2,11 +2,13 @@ package skibidilandia.enchants;
 
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
+import org.bukkit.block.BlockState;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -22,6 +24,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
+import skibidilandia.furnacetools.FurnaceSmelting;
+import skibidilandia.furnacetools.FurnaceToolItems;
+import skibidilandia.mcmmo.McmmoXp;
+
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -35,13 +42,21 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * Efeito (mineração): ao quebrar um bloco com uma ferramenta Hexa, quebra também
  * a área 3x3 ao redor, no plano da face que está sendo minerada (alarga o túnel).
+ *
+ * Combo com a fornalha: se a ferramenta Hexa também for uma ferramenta da fornalha
+ * com auto-fundição ligada, os drops da área 3x3 são fundidos antes de cair — assim
+ * o efeito não funde só o bloco central (que a ferramenta da fornalha já trata), mas
+ * a área inteira.
  */
 public class EnchantsListeners implements Listener {
 
     private final JavaPlugin plugin;
+    /** Tabela de fundição da fornalha; pode ser null se aquele sistema não estiver ligado. */
+    private final FurnaceSmelting smelting;
 
-    public EnchantsListeners(JavaPlugin plugin) {
+    public EnchantsListeners(JavaPlugin plugin, FurnaceSmelting smelting) {
         this.plugin = plugin;
+        this.smelting = smelting;
     }
 
     /** Níveis de XP para aplicar o Hexa na bigorna. */
@@ -176,7 +191,7 @@ public class EnchantsListeners implements Listener {
                     block.setType(Material.AIR);
                     continue;
                 }
-                block.breakNaturally(tool); // dropa respeitando a ferramenta (fortuna/toque suave)
+                breakBlock(block, tool, player); // funde a área se a ferramenta for da fornalha
                 tool = applyDamage(tool, player);
                 if (tool == null) {
                     player.getInventory().setItemInMainHand(null);
@@ -186,6 +201,53 @@ public class EnchantsListeners implements Listener {
         }
         if (!creative) {
             player.getInventory().setItemInMainHand(tool);
+        }
+    }
+
+    /**
+     * Quebra um bloco da área Hexa. Se a ferramenta for uma ferramenta da fornalha
+     * com auto-fundição ligada, funde os drops (anulando Toque Suave, igual ao bloco
+     * central que a própria ferramenta da fornalha trata); senão, quebra normalmente
+     * respeitando Fortuna/Toque Suave da ferramenta.
+     */
+    private void breakBlock(Block block, ItemStack tool, Player player) {
+        // Estado capturado antes de quebrar: o mcMMO usa o material para creditar o
+        // XP de mineração/lenhador/escavação que esta quebra (sem BlockBreakEvent)
+        // não daria sozinha.
+        BlockState before = block.getState();
+
+        boolean smeltable = smelting != null
+                && FurnaceToolItems.readType(tool) != null
+                && FurnaceToolItems.isEnabled(tool);
+        if (!smeltable) {
+            block.breakNaturally(tool); // dropa respeitando a ferramenta (fortuna/toque suave)
+            McmmoXp.blockBreak(player, before);
+            return;
+        }
+
+        // Toque Suave é ignorado pela fornalha (mesma regra do bloco central).
+        ItemStack calcTool = tool;
+        if (tool.containsEnchantment(Enchantment.SILK_TOUCH)) {
+            calcTool = tool.clone();
+            calcTool.removeEnchantment(Enchantment.SILK_TOUCH);
+        }
+        Collection<ItemStack> drops = block.getDrops(calcTool, player);
+        block.setType(Material.AIR);
+        McmmoXp.blockBreak(player, before);
+
+        World world = block.getWorld();
+        Location at = block.getLocation().add(0.5, 0.5, 0.5);
+        for (ItemStack drop : drops) {
+            if (drop == null || drop.getType() == Material.AIR) {
+                continue;
+            }
+            ItemStack result = smelting.smelt(drop.getType());
+            if (result != null) {
+                result.setAmount(result.getAmount() * drop.getAmount());
+                world.dropItemNaturally(at, result);
+            } else {
+                world.dropItemNaturally(at, drop);
+            }
         }
     }
 

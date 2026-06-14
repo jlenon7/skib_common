@@ -31,6 +31,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
     private MjolnirListeners mjolnirListeners;
     private WarriorSwordListeners warriorSwordListeners;
     private AssassinListeners assassinListeners;
+    private InfinityForgeListeners infinityForgeListeners;
 
     public MineMagicPlugin(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -46,6 +47,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
         mjolnirListeners = new MjolnirListeners(plugin);
         warriorSwordListeners = new WarriorSwordListeners(plugin);
         assassinListeners = new AssassinListeners(plugin);
+        infinityForgeListeners = new InfinityForgeListeners(plugin);
         plugin.getServer().getPluginManager().registerEvents(mageStaffListeners, plugin);
         plugin.getServer().getPluginManager().registerEvents(healerStaffListeners, plugin);
         plugin.getServer().getPluginManager().registerEvents(necromancerListeners, plugin);
@@ -53,6 +55,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
         plugin.getServer().getPluginManager().registerEvents(mjolnirListeners, plugin);
         plugin.getServer().getPluginManager().registerEvents(warriorSwordListeners, plugin);
         plugin.getServer().getPluginManager().registerEvents(assassinListeners, plugin);
+        plugin.getServer().getPluginManager().registerEvents(infinityForgeListeners, plugin);
         necromancerListeners.start();
         assassinListeners.start();
 
@@ -85,6 +88,9 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
         if (assassinListeners != null) {
             assassinListeners.shutdown();
         }
+        if (infinityForgeListeners != null) {
+            infinityForgeListeners.shutdown();
+        }
     }
 
     @Override
@@ -103,6 +109,12 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
             case "souls":
             case "almas":
                 return handleSouls(sender, args);
+            case "fundir":
+            case "gema":
+                return handleFundir(sender, args);
+            case "nivel":
+            case "level":
+                return handleNivel(sender, args);
             default:
                 sendUsage(sender);
                 return true;
@@ -111,10 +123,79 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
 
     private void sendUsage(CommandSender sender) {
         sender.sendMessage(ChatColor.YELLOW + "Uso:");
-        sender.sendMessage(ChatColor.YELLOW + "  /minemagic dar <cajadomago|cajadocurandeiro|cajadonecromante|arcoelfo|mjolnir|espadaguerreiro|adagas> [jogador]");
+        sender.sendMessage(ChatColor.YELLOW + "  /minemagic dar <cajadomago|cajadocurandeiro|cajadonecromante|arcoelfo|mjolnir|espadaguerreiro|adagas|gema|forja> [jogador]");
         sender.sendMessage(ChatColor.YELLOW + "  /minemagic souls add <tipo> <quantidade> [jogador]" + ChatColor.GRAY + " — adiciona almas ao cajado na mão");
         sender.sendMessage(ChatColor.YELLOW + "  /minemagic souls clear [jogador]" + ChatColor.GRAY + " — zera as almas do cajado na mão");
         sender.sendMessage(ChatColor.YELLOW + "  /minemagic souls list [jogador]" + ChatColor.GRAY + " — lista as almas do cajado na mão");
+        sender.sendMessage(ChatColor.YELLOW + "  /minemagic fundir [jogador]" + ChatColor.GRAY + " — libera a próxima habilidade da arma na mão (1 gema)");
+        sender.sendMessage(ChatColor.YELLOW + "  /minemagic nivel <1-4|max> [jogador]" + ChatColor.GRAY + " — define o nível de habilidades da arma na mão");
+    }
+
+    /** /minemagic fundir [jogador] — libera a próxima habilidade da arma na mão (atalho de teste da gema). */
+    private boolean handleFundir(CommandSender sender, String[] args) {
+        Player target = resolvePlayer(sender, args, 1);
+        if (target == null) {
+            return true;
+        }
+        ItemStack weapon = heldUpgradeable(sender, target);
+        if (weapon == null) {
+            return true;
+        }
+        if (MineMagicItems.getAbilityLevel(weapon) >= MineMagicItems.getMaxAbilityLevel(weapon)) {
+            sender.sendMessage(ChatColor.RED + "A arma de " + target.getName()
+                    + " já tem todas as habilidades liberadas.");
+            return true;
+        }
+        int newLevel = MineMagicItems.unlockNextAbility(weapon);
+        target.getInventory().setItemInMainHand(weapon);
+        sender.sendMessage(ChatColor.GREEN + "Habilidade liberada: " + ChatColor.WHITE
+                + MineMagicItems.abilityName(weapon, newLevel - 1) + ChatColor.GREEN + " (nível " + newLevel
+                + "/" + MineMagicItems.getMaxAbilityLevel(weapon) + ") para " + target.getName() + ".");
+        return true;
+    }
+
+    /** /minemagic nivel <1-4|max> [jogador] — define direto o nível de habilidades da arma na mão. */
+    private boolean handleNivel(CommandSender sender, String[] args) {
+        if (args.length < 2) {
+            sender.sendMessage(ChatColor.YELLOW + "Uso: /minemagic nivel <1-4|max> [jogador]");
+            return true;
+        }
+        Player target = resolvePlayer(sender, args, 2);
+        if (target == null) {
+            return true;
+        }
+        ItemStack weapon = heldUpgradeable(sender, target);
+        if (weapon == null) {
+            return true;
+        }
+        int max = MineMagicItems.getMaxAbilityLevel(weapon);
+        int level;
+        if (args[1].equalsIgnoreCase("max")) {
+            level = max;
+        } else {
+            try {
+                level = Integer.parseInt(args[1]);
+            } catch (NumberFormatException ex) {
+                sender.sendMessage(ChatColor.RED + "Nível inválido: " + args[1] + " (use 1-" + max + " ou max).");
+                return true;
+            }
+        }
+        MineMagicItems.setAbilityLevel(weapon, level);
+        target.getInventory().setItemInMainHand(weapon);
+        sender.sendMessage(ChatColor.GREEN + "Nível de habilidades da arma de " + target.getName()
+                + " definido para " + ChatColor.WHITE + MineMagicItems.getAbilityLevel(weapon) + "/" + max + ".");
+        return true;
+    }
+
+    /** Arma upgradeável na mão principal do alvo; manda erro e devolve null se não estiver. */
+    private ItemStack heldUpgradeable(CommandSender sender, Player target) {
+        ItemStack weapon = target.getInventory().getItemInMainHand();
+        if (!MineMagicItems.isUpgradeable(weapon)) {
+            sender.sendMessage(ChatColor.RED + target.getName()
+                    + " precisa segurar uma arma mágica (adagas, arco, cajado do mago/curandeiro ou espada) na mão.");
+            return null;
+        }
+        return weapon;
     }
 
     /** /minemagic souls <add|clear|list> ... — gerencia as almas do Cajado do Necromante na mão. */
@@ -157,7 +238,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
 
         ItemStack item = build(args[1]);
         if (item == null) {
-            sender.sendMessage(ChatColor.RED + "Item inválido. Use: cajadomago, cajadocurandeiro, cajadonecromante, arcoelfo, mjolnir, espadaguerreiro ou adagas.");
+            sender.sendMessage(ChatColor.RED + "Item inválido. Use: cajadomago, cajadocurandeiro, cajadonecromante, arcoelfo, mjolnir, espadaguerreiro, adagas, gema ou forja.");
             return true;
         }
 
@@ -337,6 +418,18 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
             case "assassin":
             case "daggers":
                 return MineMagicItems.createAssassinDaggers();
+            case "gema":
+            case "gemainfinito":
+            case "gemadoinfinito":
+            case "infinitygem":
+            case "gem":
+                return MineMagicItems.createInfinityGem(1);
+            case "forja":
+            case "forjainfinito":
+            case "forjadoinfinito":
+            case "infinityforge":
+            case "forge":
+                return MineMagicItems.createInfinityForge();
             default:
                 return null;
         }
@@ -344,7 +437,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
 
     private static final List<String> ITEM_ARGS = Arrays.asList(
             "cajadomago", "cajadocurandeiro", "cajadonecromante", "arcoelfo",
-            "mjolnir", "espadaguerreiro", "adagas");
+            "mjolnir", "espadaguerreiro", "adagas", "gema", "forja");
     private static final List<String> SOUL_TYPE_HINTS = Arrays.asList(
             "ZOMBIE", "SKELETON", "HORSE", "BLAZE", "GHAST", "SPIDER", "ENDER_DRAGON",
             "GIANT", "RAVAGER", "VEX", "BREEZE", "ELDER_GUARDIAN", "ENDERMAN", "PHANTOM",
@@ -353,7 +446,7 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return filter(Arrays.asList("dar", "souls"), args[0]);
+            return filter(Arrays.asList("dar", "souls", "fundir", "nivel"), args[0]);
         }
         String sub = args[0].toLowerCase();
         boolean souls = sub.equals("souls") || sub.equals("almas");
@@ -364,10 +457,19 @@ public class MineMagicPlugin implements CommandExecutor, TabCompleter {
             if (souls) {
                 return filter(Arrays.asList("add", "clear", "list"), args[1]);
             }
+            if (sub.equals("fundir") || sub.equals("gema")) {
+                return filter(onlinePlayerNames(), args[1]);
+            }
+            if (sub.equals("nivel") || sub.equals("level")) {
+                return filter(Arrays.asList("1", "2", "3", "4", "max"), args[1]);
+            }
             return new ArrayList<>();
         }
         if (args.length == 3) {
             if (sub.equals("dar")) {
+                return filter(onlinePlayerNames(), args[2]);
+            }
+            if (sub.equals("nivel") || sub.equals("level")) {
                 return filter(onlinePlayerNames(), args[2]);
             }
             if (souls) {

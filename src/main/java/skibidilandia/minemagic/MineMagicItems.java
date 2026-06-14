@@ -14,6 +14,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import skibidilandia.SkibModel;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,6 +49,51 @@ public final class MineMagicItems {
     public static final Material ASSASSIN_DAGGERS_MATERIAL = Material.NETHERITE_SWORD;
     public static final Material WARRIOR_SWORD_MATERIAL = Material.NETHERITE_SWORD;
 
+    // Itens do sistema de nivelamento (fusão libera habilidades).
+    public static final Material INFINITY_GEM_MATERIAL = Material.AMETHYST_SHARD;
+    public static final Material INFINITY_FORGE_MATERIAL = Material.SMITHING_TABLE;
+
+    /** Nomes das habilidades por arma, na ordem das teclas (1, 2, 3, ...). A habilidade
+     *  de índice {@code i} (tecla {@code i+1}) só está liberada se o nível ≥ {@code i+1}. */
+    private static final String[] MAGE_ABILITIES = {"Fogo", "Raio", "Congelar", "Levitar"};
+    private static final String[] MAGE_DESCS = {
+            "Segure o botão direito para uma rajada de bolas de fogo. Shift + botão direito: chuva de fogo na área.",
+            "Botão direito faz um raio cair na área visada (segure para uma rajada). Shift + botão direito: chuva de raios.",
+            "Botão direito congela o alvo visado (jogador ou mob) por alguns segundos.",
+            "Lança você para o alto na hora. Recarga de 15s."};
+
+    private static final String[] HEALER_ABILITIES = {"Cura", "Gravidade", "Limpar alvos"};
+    private static final String[] HEALER_DESCS = {
+            "Bata em um jogador para marcá-lo como alvo (bata de novo para remover). Segure o botão direito para curar os alvos em 30x30x30.",
+            "Botão direito arremessa tudo para o alto e puxa até você. Shift + botão direito: repele tudo em 10x10x10.",
+            "Remove todos os alvos de cura selecionados."};
+
+    private static final String[] ELF_BOW_ABILITIES = {"Flechas explosivas", "Disparo em espiral", "Chuva de flechas"};
+    private static final String[] ELF_BOW_DESCS = {
+            "Por 10s, suas flechas causam explosão e sangramento ao acertar.",
+            "Por 10s, cada disparo solta 6 flechas em espiral.",
+            "Faz chover flechas sobre a área visada (aproveita as habilidades 1 e 2 ativas)."};
+
+    private static final String[] WARRIOR_ABILITIES = {"Arremesso de espada", "Postura defensiva", "Domo de bedrock"};
+    private static final String[] WARRIOR_PASSIVES = {
+            "20% de chance de causar uma explosão (1 TNT) ao atacar."};
+    private static final String[] WARRIOR_DESCS = {
+            "Arremessa a espada, causando dano ao acertar. Ela volta à sua mão.",
+            "Ganha Resistência + Lentidão por 10s.",
+            "Ergue um domo de bedrock 20x20x20 prendendo os inimigos por 20s."};
+
+    private static final String[] DAGGER_ABILITIES = {"Leque de adagas", "Clone das sombras", "Tornado de adagas", "Execução"};
+    private static final String[] DAGGER_PASSIVES = {
+            "20% de chance de sangramento ao acertar."};
+    private static final String[] DAGGER_DESCS = {
+            "Arremessa adagas na direção da mira.",
+            "Joga um clone das sombras 5 blocos à frente que dura 10s e copia as habilidades 1 e 3. Aperte 2 de novo para trocar de lugar com ele.",
+            "Cria um tornado de adagas ao seu redor que fere e arremessa os inimigos próximos.",
+            "Teleporta para as costas do inimigo mirado e deixa um clone no lugar. Marca o alvo: a execução explode em 5s (quanto mais dano causado, maior a explosão). Aperte 4 de novo para trocar de lugar. Recarga de 20s."};
+
+    /** Largura visível alvo (sem códigos de cor) para quebrar a lore em linhas. */
+    private static final int LORE_WIDTH = 46;
+
     // Modos das classes (guardados no PDC do cajado).
     public static final String MAGE_FIRE = "FIRE";
     public static final String MAGE_LIGHTNING = "LIGHTNING";
@@ -55,13 +101,20 @@ public final class MineMagicItems {
     public static final String HEALER_HEAL = "HEAL";
     public static final String HEALER_GRAVITY = "GRAVITY";
 
-    // custom_model_data por modo (um resource pack pode dar textura própria a cada um).
-    private static final int CMD_MAGE_FIRE = 5101;
-    private static final int CMD_MAGE_LIGHTNING = 5102;
-    private static final int CMD_MAGE_FREEZE = 5105;
-    private static final int CMD_HEALER_HEAL = 5103;
-    private static final int CMD_HEALER_GRAVITY = 5104;
-    private static final int CMD_ASSASSIN_DAGGERS = 5200;
+    // Ids de modelo do resource pack (componente item_model, namespace "skib").
+    private static String mageModelId(String mode) {
+        if (MAGE_LIGHTNING.equals(mode)) {
+            return "cajado_mago_raio";
+        }
+        if (MAGE_FREEZE.equals(mode)) {
+            return "cajado_mago_congelar";
+        }
+        return "cajado_mago_fogo";
+    }
+
+    private static String healerModelId(String mode) {
+        return HEALER_GRAVITY.equals(mode) ? "cajado_curandeiro_gravidade" : "cajado_curandeiro_cura";
+    }
 
     /** Em testes, o cajado entregue pelo admin já vem com almas de tudo. */
     private static final boolean SEED_TEST_SOULS = true;
@@ -105,6 +158,10 @@ public final class MineMagicItems {
     private static NamespacedKey mjolnirKey;
     private static NamespacedKey warriorSwordKey;
     private static NamespacedKey assassinDaggersKey;
+    /** Nível de habilidades liberadas (1 = só a primeira). Compartilhado por todas as armas upgradeáveis. */
+    private static NamespacedKey abilityLevelKey;
+    private static NamespacedKey infinityGemKey;
+    private static NamespacedKey infinityForgeKey;
 
     private MineMagicItems() {
     }
@@ -124,6 +181,9 @@ public final class MineMagicItems {
         mjolnirKey = new NamespacedKey(plugin, "mjolnir");
         warriorSwordKey = new NamespacedKey(plugin, "warrior_sword");
         assassinDaggersKey = new NamespacedKey(plugin, "assassin_daggers");
+        abilityLevelKey = new NamespacedKey(plugin, "ability_level");
+        infinityGemKey = new NamespacedKey(plugin, "infinity_gem");
+        infinityForgeKey = new NamespacedKey(plugin, "infinity_forge");
     }
 
     // =========================================================================
@@ -137,8 +197,10 @@ public final class MineMagicItems {
         meta.setUnbreakable(true);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(mageStaffKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(abilityLevelKey, PersistentDataType.INTEGER, 1);
         applyMageMode(meta, MAGE_FIRE);
         item.setItemMeta(meta);
+        SkibModel.apply(item, mageModelId(MAGE_FIRE));
         return item;
     }
 
@@ -170,62 +232,32 @@ public final class MineMagicItems {
         ItemMeta meta = item.getItemMeta();
         applyMageMode(meta, mode);
         item.setItemMeta(meta);
+        SkibModel.apply(item, mageModelId(getMageMode(item)));
+    }
+
+    /** Modo do Cajado do Mago lido direto do meta ({@link #MAGE_FIRE} por padrão). */
+    private static String getMageMode(ItemMeta meta) {
+        String m = meta.getPersistentDataContainer().get(mageModeKey, PersistentDataType.STRING);
+        if (MAGE_LIGHTNING.equals(m) || MAGE_FREEZE.equals(m)) {
+            return m;
+        }
+        return MAGE_FIRE;
     }
 
     /** Aplica nome/modelo/lore correspondentes ao modo do Cajado do Mago. */
     private static void applyMageMode(ItemMeta meta, String mode) {
         String resolved;
-        int cmd;
         if (MAGE_LIGHTNING.equals(mode)) {
             resolved = MAGE_LIGHTNING;
-            cmd = CMD_MAGE_LIGHTNING;
         } else if (MAGE_FREEZE.equals(mode)) {
             resolved = MAGE_FREEZE;
-            cmd = CMD_MAGE_FREEZE;
         } else {
             resolved = MAGE_FIRE;
-            cmd = CMD_MAGE_FIRE;
         }
         meta.getPersistentDataContainer().set(mageModeKey, PersistentDataType.STRING, resolved);
-        meta.setCustomModelData(cmd);
         meta.setDisplayName(ChatColor.BLUE + "" + ChatColor.BOLD + "Cajado do Mago");
-
-        List<String> lore = new ArrayList<>();
-        switch (resolved) {
-            case MAGE_LIGHTNING:
-                lore.add(ChatColor.GRAY + "Modo atual: " + ChatColor.AQUA + "" + ChatColor.BOLD + "Raio");
-                lore.add("");
-                lore.add(ChatColor.GRAY + "Botão direito: um " + ChatColor.AQUA + "raio" + ChatColor.GRAY
-                        + " cai do céu sobre");
-                lore.add(ChatColor.GRAY + "a área visada. Segure para uma " + ChatColor.AQUA + "rajada de raios"
-                        + ChatColor.GRAY + ".");
-                lore.add(ChatColor.GRAY + "" + ChatColor.RED + "Shift" + ChatColor.GRAY + " + botão direito: "
-                        + ChatColor.AQUA + "chuva de raios" + ChatColor.GRAY + " sobre a área.");
-                break;
-            case MAGE_FREEZE:
-                lore.add(ChatColor.GRAY + "Modo atual: " + ChatColor.WHITE + "" + ChatColor.BOLD + "Congelar");
-                lore.add("");
-                lore.add(ChatColor.GRAY + "Botão direito: " + ChatColor.WHITE + "congela" + ChatColor.GRAY
-                        + " o alvo visado");
-                lore.add(ChatColor.GRAY + "(jogador ou mob), prendendo-o por alguns segundos.");
-                break;
-            default:
-                lore.add(ChatColor.GRAY + "Modo atual: " + ChatColor.GOLD + "" + ChatColor.BOLD + "Fogo");
-                lore.add("");
-                lore.add(ChatColor.GRAY + "Segure o " + ChatColor.RED + "botão direito" + ChatColor.GRAY
-                        + ": rajada de " + ChatColor.GOLD + "bolas de fogo" + ChatColor.GRAY + ".");
-                lore.add(ChatColor.GRAY + "" + ChatColor.RED + "Shift" + ChatColor.GRAY + " + botão direito: "
-                        + ChatColor.GOLD + "chuva de fogo" + ChatColor.GRAY + " sobre a área.");
-                break;
-        }
-        lore.add("");
-        lore.add(ChatColor.YELLOW + "Tecla 1" + ChatColor.GRAY + ": Fogo  ·  " + ChatColor.YELLOW + "Tecla 2"
-                + ChatColor.GRAY + ": Raio  ·  " + ChatColor.YELLOW + "Tecla 3" + ChatColor.GRAY + ": Congelar");
-        lore.add(ChatColor.YELLOW + "Tecla 4" + ChatColor.GRAY + ": Levitar na hora "
-                + ChatColor.DARK_GRAY + "(recarga de 15s)");
-        lore.add(ChatColor.GRAY + "O cajado " + ChatColor.WHITE + "nunca é arremessado" + ChatColor.GRAY
-                + " como um tridente.");
-        meta.setLore(lore);
+        int activeIndex = MAGE_LIGHTNING.equals(resolved) ? 1 : MAGE_FREEZE.equals(resolved) ? 2 : 0;
+        meta.setLore(abilityLore(meta, null, MAGE_ABILITIES, MAGE_DESCS, activeIndex));
     }
 
     // =========================================================================
@@ -251,6 +283,7 @@ public final class MineMagicItems {
         writeSouls(meta, souls);
         rebuildLore(meta, souls, getSelType(meta), getSelQty(meta));
         item.setItemMeta(meta);
+        SkibModel.apply(item, "cajado_necromante");
         return item;
     }
 
@@ -532,8 +565,10 @@ public final class MineMagicItems {
         meta.setUnbreakable(true);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(healerStaffKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(abilityLevelKey, PersistentDataType.INTEGER, 1);
         applyHealerMode(meta, HEALER_HEAL);
         item.setItemMeta(meta);
+        SkibModel.apply(item, healerModelId(HEALER_HEAL));
         return item;
     }
 
@@ -561,6 +596,7 @@ public final class MineMagicItems {
         ItemMeta meta = item.getItemMeta();
         applyHealerMode(meta, mode);
         item.setItemMeta(meta);
+        SkibModel.apply(item, healerModelId(getHealerMode(item)));
     }
 
     /** UUIDs dos jogadores atualmente selecionados como alvo de cura. */
@@ -642,32 +678,9 @@ public final class MineMagicItems {
         boolean gravity = HEALER_GRAVITY.equals(mode);
         meta.getPersistentDataContainer().set(healerModeKey, PersistentDataType.STRING,
                 gravity ? HEALER_GRAVITY : HEALER_HEAL);
-        meta.setCustomModelData(gravity ? CMD_HEALER_GRAVITY : CMD_HEALER_HEAL);
         meta.setDisplayName(ChatColor.GREEN + "" + ChatColor.BOLD + "Cajado do Curandeiro");
 
-        List<String> lore = new ArrayList<>();
-        if (gravity) {
-            lore.add(ChatColor.GRAY + "Modo atual: " + ChatColor.LIGHT_PURPLE + "" + ChatColor.BOLD + "Gravidade");
-            lore.add("");
-            lore.add(ChatColor.GRAY + "Botão direito: arremessa para o alto e " + ChatColor.AQUA + "puxa"
-                    + ChatColor.GRAY + " tudo até você.");
-            lore.add(ChatColor.GRAY + "" + ChatColor.RED + "Shift" + ChatColor.GRAY + " + botão direito: "
-                    + ChatColor.RED + "repele" + ChatColor.GRAY + " tudo (10x10x10).");
-        } else {
-            lore.add(ChatColor.GRAY + "Modo atual: " + ChatColor.GREEN + "" + ChatColor.BOLD + "Cura");
-            lore.add("");
-            lore.add(ChatColor.GRAY + "Bata em um " + ChatColor.GREEN + "jogador" + ChatColor.GRAY
-                    + " para selecioná-lo");
-            lore.add(ChatColor.GRAY + "como alvo (bata de novo para remover).");
-            lore.add(ChatColor.GRAY + "Segure o " + ChatColor.RED + "botão direito" + ChatColor.GRAY + ": "
-                    + ChatColor.GREEN + "cura" + ChatColor.GRAY + " os alvos em 30x30x30.");
-        }
-        lore.add("");
-        lore.add(ChatColor.YELLOW + "Tecla 1" + ChatColor.GRAY + ": Cura  ·  " + ChatColor.YELLOW + "Tecla 2"
-                + ChatColor.GRAY + ": Gravidade " + ChatColor.DARK_GRAY + "(sem recarga)");
-        lore.add(ChatColor.YELLOW + "Tecla 3" + ChatColor.GRAY + ": limpar alvos.");
-        lore.add(ChatColor.GRAY + "O cajado " + ChatColor.WHITE + "nunca é arremessado" + ChatColor.GRAY
-                + " como um tridente.");
+        List<String> lore = abilityLore(meta, null, HEALER_ABILITIES, HEALER_DESCS, gravity ? 1 : 0);
 
         List<String> targetNames = readTargetNames(meta);
         lore.add("");
@@ -691,31 +704,20 @@ public final class MineMagicItems {
     public static ItemStack createElfBow() {
         ItemStack item = new ItemStack(ELF_BOW_MATERIAL);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(ChatColor.DARK_GREEN + "" + ChatColor.BOLD + "Arco do Elfo");
-        meta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Habilidades " + ChatColor.WHITE + "(aperte a tecla para usar)" + ChatColor.GRAY + ":",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 1" + ChatColor.GRAY + ": por " + ChatColor.WHITE
-                        + "10s" + ChatColor.GRAY + ", suas flechas causam",
-                ChatColor.GRAY + "   " + ChatColor.RED + "explosão" + ChatColor.GRAY + " e " + ChatColor.DARK_RED
-                        + "sangramento" + ChatColor.GRAY + " ao acertar.",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 2" + ChatColor.GRAY + ": por " + ChatColor.WHITE
-                        + "10s" + ChatColor.GRAY + ", cada disparo solta",
-                ChatColor.GRAY + "   " + ChatColor.GREEN + "6 flechas em espiral" + ChatColor.GRAY + ".",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 3" + ChatColor.GRAY + ": " + ChatColor.DARK_GREEN
-                        + "chuva de flechas" + ChatColor.GRAY + " sobre a área.",
-                "",
-                ChatColor.GRAY + "As habilidades " + ChatColor.YELLOW + "1" + ChatColor.GRAY + " e " + ChatColor.YELLOW
-                        + "2" + ChatColor.GRAY + " se combinam, e a",
-                ChatColor.GRAY + "chuva " + ChatColor.YELLOW + "(3)" + ChatColor.GRAY + " aproveita ambas.",
-                ChatColor.DARK_GRAY + "Dica: mantenha o arco num slot 5-9 para",
-                ChatColor.DARK_GRAY + "deixar as teclas 1-3 livres para as habilidades.",
-                ChatColor.GRAY + "Indestrutível."
-        ));
         meta.setUnbreakable(true);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(elfBowKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(abilityLevelKey, PersistentDataType.INTEGER, 1);
+        applyElfBowLore(meta);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "arco_elfo");
         return item;
+    }
+
+    /** (Re)constrói nome e lore do Arco do Elfo conforme o nível de habilidades. */
+    private static void applyElfBowLore(ItemMeta meta) {
+        meta.setDisplayName(ChatColor.DARK_GREEN + "" + ChatColor.BOLD + "Arco do Elfo");
+        meta.setLore(abilityLore(meta, null, ELF_BOW_ABILITIES, ELF_BOW_DESCS, -1));
     }
 
     /** True se o item for o Arco do Elfo. */
@@ -745,6 +747,7 @@ public final class MineMagicItems {
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(mjolnirKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "mjolnir");
         return item;
     }
 
@@ -764,26 +767,20 @@ public final class MineMagicItems {
     public static ItemStack createWarriorSword() {
         ItemStack item = new ItemStack(WARRIOR_SWORD_MATERIAL);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(ChatColor.RED + "" + ChatColor.BOLD + "Espada do Guerreiro");
-        meta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Passiva: " + ChatColor.RED + "20%" + ChatColor.GRAY + " de chance de causar",
-                ChatColor.GRAY + "uma " + ChatColor.RED + "explosão (1 TNT)" + ChatColor.GRAY + " ao atacar.",
-                "",
-                ChatColor.GOLD + "Habilidades:",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 1" + ChatColor.GRAY + ": arremessa a espada e",
-                ChatColor.GRAY + "   causa dano ao acertar " + ChatColor.WHITE + "(volta à mão)" + ChatColor.GRAY + ".",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 2" + ChatColor.GRAY + ": " + ChatColor.AQUA
-                        + "Resistência" + ChatColor.GRAY + " + " + ChatColor.BLUE + "Lentidão" + ChatColor.GRAY + " (10s).",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 3" + ChatColor.GRAY + ": " + ChatColor.DARK_GRAY
-                        + "domo de bedrock" + ChatColor.GRAY + " 20x20x20",
-                ChatColor.GRAY + "   prendendo os inimigos por 20s.",
-                "",
-                ChatColor.GRAY + "Indestrutível."));
         meta.setUnbreakable(true);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(warriorSwordKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(abilityLevelKey, PersistentDataType.INTEGER, 1);
+        applyWarriorSwordLore(meta);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "espada_guerreiro");
         return item;
+    }
+
+    /** (Re)constrói nome e lore da Espada do Guerreiro conforme o nível de habilidades. */
+    private static void applyWarriorSwordLore(ItemMeta meta) {
+        meta.setDisplayName(ChatColor.RED + "" + ChatColor.BOLD + "Espada do Guerreiro");
+        meta.setLore(abilityLore(meta, WARRIOR_PASSIVES, WARRIOR_ABILITIES, WARRIOR_DESCS, -1));
     }
 
     /** True se o item for a Espada do Guerreiro. */
@@ -802,35 +799,20 @@ public final class MineMagicItems {
     public static ItemStack createAssassinDaggers() {
         ItemStack item = new ItemStack(ASSASSIN_DAGGERS_MATERIAL);
         ItemMeta meta = item.getItemMeta();
-        meta.setDisplayName(ChatColor.DARK_GRAY + "" + ChatColor.BOLD + "Adagas do Assassino");
-        meta.setCustomModelData(CMD_ASSASSIN_DAGGERS);
-        meta.setLore(Arrays.asList(
-                ChatColor.GRAY + "Habilidades " + ChatColor.WHITE + "(aperte a tecla para usar)" + ChatColor.GRAY + ":",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 1" + ChatColor.GRAY + ": arremessa "
-                        + ChatColor.WHITE + "adagas" + ChatColor.GRAY + " na direção da mira.",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 2" + ChatColor.GRAY + ": joga um "
-                        + ChatColor.DARK_PURPLE + "clone das sombras" + ChatColor.GRAY + " 5 blocos à frente.",
-                ChatColor.GRAY + "   O clone dura 10s e copia as habilidades 1 e 3.",
-                ChatColor.GRAY + "   Aperte 2 de novo (em 10s) para " + ChatColor.WHITE + "trocar de lugar" + ChatColor.GRAY + ".",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 3" + ChatColor.GRAY + ": "
-                        + ChatColor.AQUA + "tornado de adagas" + ChatColor.GRAY + " ao redor.",
-                ChatColor.GRAY + " • " + ChatColor.YELLOW + "Tecla 4" + ChatColor.GRAY + " " + ChatColor.LIGHT_PURPLE
-                        + "(especial)" + ChatColor.GRAY + ": teleporta para as " + ChatColor.WHITE + "costas",
-                ChatColor.GRAY + "   de um inimigo mirado e deixa um clone no lugar.",
-                ChatColor.GRAY + "   Marca o alvo: " + ChatColor.DARK_RED + "execução" + ChatColor.GRAY
-                        + " explode em 5s (mais",
-                ChatColor.GRAY + "   dano causado = explosão maior).",
-                ChatColor.GRAY + "   Aperte 4 de novo (em 10s) para trocar de lugar.",
-                ChatColor.DARK_GRAY + "   Recarga de 20s após o especial.",
-                "",
-                ChatColor.DARK_GRAY + "Dica: mantenha as adagas num slot 5-9 para",
-                ChatColor.DARK_GRAY + "deixar as teclas 1-4 livres para as habilidades.",
-                ChatColor.GRAY + "Indestrutíveis."));
         meta.setUnbreakable(true);
         meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE, ItemFlag.HIDE_ATTRIBUTES);
         meta.getPersistentDataContainer().set(assassinDaggersKey, PersistentDataType.BYTE, (byte) 1);
+        meta.getPersistentDataContainer().set(abilityLevelKey, PersistentDataType.INTEGER, 1);
+        applyDaggersLore(meta);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "adaga_assassino");
         return item;
+    }
+
+    /** (Re)constrói nome e lore das Adagas do Assassino conforme o nível de habilidades. */
+    private static void applyDaggersLore(ItemMeta meta) {
+        meta.setDisplayName(ChatColor.DARK_GRAY + "" + ChatColor.BOLD + "Adagas do Assassino");
+        meta.setLore(abilityLore(meta, DAGGER_PASSIVES, DAGGER_ABILITIES, DAGGER_DESCS, -1));
     }
 
     /** True se o item for as Adagas do Assassino. */
@@ -839,5 +821,249 @@ public final class MineMagicItems {
             return false;
         }
         return item.getItemMeta().getPersistentDataContainer().has(assassinDaggersKey, PersistentDataType.BYTE);
+    }
+
+    // =========================================================================
+    //  Nivelamento de habilidades (Gema + Forja do Infinito)
+    // =========================================================================
+
+    /** Lista de habilidades da arma (na ordem das teclas), ou null se não for upgradeável. */
+    private static String[] abilityNames(ItemStack item) {
+        if (isMageStaff(item)) {
+            return MAGE_ABILITIES;
+        }
+        if (isHealerStaff(item)) {
+            return HEALER_ABILITIES;
+        }
+        if (isElfBow(item)) {
+            return ELF_BOW_ABILITIES;
+        }
+        if (isWarriorSword(item)) {
+            return WARRIOR_ABILITIES;
+        }
+        if (isAssassinDaggers(item)) {
+            return DAGGER_ABILITIES;
+        }
+        return null;
+    }
+
+    /** True se o item participa do sistema de nivelamento. */
+    public static boolean isUpgradeable(ItemStack item) {
+        return abilityNames(item) != null;
+    }
+
+    /** Total de habilidades da arma (0 se não for upgradeável). */
+    public static int getMaxAbilityLevel(ItemStack item) {
+        String[] names = abilityNames(item);
+        return names == null ? 0 : names.length;
+    }
+
+    /** Nível atual de habilidades liberadas (≥1). Armas antigas sem o dado contam como nível 1. */
+    public static int getAbilityLevel(ItemStack item) {
+        if (!isUpgradeable(item) || !item.hasItemMeta()) {
+            return 1;
+        }
+        return clampLevel(levelFromMeta(item.getItemMeta()), getMaxAbilityLevel(item));
+    }
+
+    /** True se a habilidade da tecla {@code slotIndex+1} (0-based) está liberada. */
+    public static boolean isAbilityUnlocked(ItemStack item, int slotIndex) {
+        return slotIndex < getAbilityLevel(item);
+    }
+
+    /** Nome da habilidade da tecla {@code slotIndex+1}, ou "?" se fora do alcance. */
+    public static String abilityName(ItemStack item, int slotIndex) {
+        String[] names = abilityNames(item);
+        if (names == null || slotIndex < 0 || slotIndex >= names.length) {
+            return "?";
+        }
+        return names[slotIndex];
+    }
+
+    /** Define o nível (entre 1 e o máximo) e reconstrói a lore. */
+    public static void setAbilityLevel(ItemStack item, int level) {
+        if (!isUpgradeable(item) || !item.hasItemMeta()) {
+            return;
+        }
+        ItemMeta meta = item.getItemMeta();
+        meta.getPersistentDataContainer().set(abilityLevelKey, PersistentDataType.INTEGER,
+                clampLevel(level, getMaxAbilityLevel(item)));
+        applyLoreFor(item, meta);
+        item.setItemMeta(meta);
+    }
+
+    /**
+     * Libera a próxima habilidade da arma. Retorna o novo nível, ou -1 se já estava
+     * no máximo (ou se o item não for upgradeável).
+     */
+    public static int unlockNextAbility(ItemStack item) {
+        if (!isUpgradeable(item)) {
+            return -1;
+        }
+        int lvl = getAbilityLevel(item);
+        if (lvl >= getMaxAbilityLevel(item)) {
+            return -1;
+        }
+        setAbilityLevel(item, lvl + 1);
+        return lvl + 1;
+    }
+
+    private static int levelFromMeta(ItemMeta meta) {
+        Integer lvl = meta.getPersistentDataContainer().get(abilityLevelKey, PersistentDataType.INTEGER);
+        return lvl == null ? 1 : lvl;
+    }
+
+    private static int clampLevel(int level, int max) {
+        if (max <= 0) {
+            return 1;
+        }
+        return Math.max(1, Math.min(max, level));
+    }
+
+    /** Reconstrói a lore da arma respeitando seu tipo, modo e nível atuais. */
+    private static void applyLoreFor(ItemStack item, ItemMeta meta) {
+        if (isMageStaff(item)) {
+            applyMageMode(meta, getMageMode(meta));
+        } else if (isHealerStaff(item)) {
+            applyHealerMode(meta, getHealerMode(meta));
+        } else if (isElfBow(item)) {
+            applyElfBowLore(meta);
+        } else if (isWarriorSword(item)) {
+            applyWarriorSwordLore(meta);
+        } else if (isAssassinDaggers(item)) {
+            applyDaggersLore(meta);
+        }
+    }
+
+    /**
+     * Monta a lore unificada da arma: bloco de passivas (sempre ✅), bloco de
+     * habilidades ativas com ✅/❌ conforme o nível e a descrição embutida, e — só
+     * enquanto houver o que liberar — a dica de fusão. {@code activeIndex} marca a
+     * habilidade-modo ativa dos cajados (use -1 quando não houver modo).
+     */
+    private static List<String> abilityLore(ItemMeta meta, String[] passives,
+                                            String[] names, String[] descs, int activeIndex) {
+        int level = clampLevel(levelFromMeta(meta), names.length);
+        List<String> lore = new ArrayList<>();
+        if (passives != null && passives.length > 0) {
+            lore.add(ChatColor.GOLD + "" + ChatColor.BOLD + "Habilidades Passiva:");
+            for (String p : passives) {
+                appendEntry(lore, ChatColor.GREEN + "✅", ChatColor.GRAY.toString(), p);
+            }
+            lore.add("");
+        }
+        lore.add(ChatColor.GOLD + "" + ChatColor.BOLD + "Habilidades Ativas:");
+        for (int i = 0; i < names.length; i++) {
+            boolean unlocked = i < level;
+            String nameColor = (unlocked ? ChatColor.WHITE : ChatColor.DARK_GRAY).toString();
+            String descColor = (unlocked ? ChatColor.GRAY : ChatColor.DARK_GRAY).toString();
+            String active = (unlocked && i == activeIndex) ? (ChatColor.YELLOW + " (ativo)") : "";
+            String head = (unlocked ? ChatColor.GREEN + "✅" : ChatColor.RED + "❌")
+                    + " " + nameColor + "Tecla " + (i + 1) + " - " + names[i] + active + nameColor + ":";
+            appendEntry(lore, head, descColor, descs[i]);
+        }
+        if (level < names.length) {
+            lore.add("");
+            appendEntry(lore, "", ChatColor.YELLOW.toString(),
+                    "Para liberar novas habilidades, funda o item com uma Gema do Infinito na Forja do Infinito.");
+        }
+        return lore;
+    }
+
+    /**
+     * Acrescenta uma entrada à lore quebrando a descrição em linhas de ~{@link #LORE_WIDTH}
+     * caracteres visíveis. A 1ª linha começa com {@code head} (já colorido); as
+     * continuações são indentadas. {@code head} vazio = parágrafo simples.
+     */
+    private static void appendEntry(List<String> lore, String head, String descColor, String description) {
+        final String indent = "  ";
+        boolean hasHead = !head.isEmpty();
+        StringBuilder line = new StringBuilder(hasHead ? head + " " + descColor : descColor);
+        int visible = hasHead ? visibleLen(head) + 1 : 0;
+        boolean any = false;
+        for (String word : description.split("\\s+")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            int wlen = word.length();
+            if (any && visible + 1 + wlen > LORE_WIDTH) {
+                lore.add(line.toString());
+                line = new StringBuilder(descColor + indent + word);
+                visible = indent.length() + wlen;
+            } else if (any) {
+                line.append(' ').append(word);
+                visible += 1 + wlen;
+            } else {
+                line.append(word);
+                visible += wlen;
+            }
+            any = true;
+        }
+        lore.add(line.toString());
+    }
+
+    /** Comprimento visível (descontando os códigos de cor §x). */
+    private static int visibleLen(String s) {
+        return ChatColor.stripColor(s).length();
+    }
+
+    // =========================================================================
+    //  Gema do Infinito e Forja do Infinito
+    // =========================================================================
+
+    /** Constrói uma pilha de Gemas do Infinito (consumível da fusão). */
+    public static ItemStack createInfinityGem(int amount) {
+        ItemStack item = new ItemStack(INFINITY_GEM_MATERIAL, Math.max(1, amount));
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.LIGHT_PURPLE + "" + ChatColor.BOLD + "Gema do Infinito");
+        meta.setLore(Arrays.asList(
+                ChatColor.GRAY + "Funda esta gema na " + ChatColor.AQUA + "Forja do Infinito",
+                ChatColor.GRAY + "junto de uma arma mágica para liberar",
+                ChatColor.GRAY + "a " + ChatColor.WHITE + "próxima habilidade" + ChatColor.GRAY + " dela.",
+                "",
+                ChatColor.DARK_GRAY + "Consumida a cada fusão."));
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+        meta.setEnchantmentGlintOverride(true);
+        meta.getPersistentDataContainer().set(infinityGemKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        SkibModel.apply(item, "gema_infinito");
+        return item;
+    }
+
+    /** True se o item for uma Gema do Infinito. */
+    public static boolean isInfinityGem(ItemStack item) {
+        if (item == null || item.getType() != INFINITY_GEM_MATERIAL || !item.hasItemMeta()) {
+            return false;
+        }
+        return item.getItemMeta().getPersistentDataContainer().has(infinityGemKey, PersistentDataType.BYTE);
+    }
+
+    /** Constrói a Forja do Infinito (estação reutilizável; clique direito abre o menu de fusão). */
+    public static ItemStack createInfinityForge() {
+        ItemStack item = new ItemStack(INFINITY_FORGE_MATERIAL);
+        ItemMeta meta = item.getItemMeta();
+        meta.setDisplayName(ChatColor.AQUA + "" + ChatColor.BOLD + "Forja do Infinito");
+        meta.setLore(Arrays.asList(
+                ChatColor.GRAY + "Posicione no " + ChatColor.WHITE + "chão" + ChatColor.GRAY + " e clique com o",
+                ChatColor.RED + "botão direito" + ChatColor.GRAY + " no bloco para abrir a forja.",
+                ChatColor.GRAY + "Coloque uma " + ChatColor.WHITE + "arma mágica" + ChatColor.GRAY + " e uma",
+                ChatColor.LIGHT_PURPLE + "Gema do Infinito" + ChatColor.GRAY + ", então funda para",
+                ChatColor.GRAY + "liberar a próxima habilidade da arma.",
+                "",
+                ChatColor.DARK_GRAY + "Estação compartilhada — qualquer um usa; só a gema some."));
+        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES);
+        meta.setEnchantmentGlintOverride(true);
+        meta.getPersistentDataContainer().set(infinityForgeKey, PersistentDataType.BYTE, (byte) 1);
+        item.setItemMeta(meta);
+        SkibModel.apply(item, "forja_infinito");
+        return item;
+    }
+
+    /** True se o item for a Forja do Infinito. */
+    public static boolean isInfinityForge(ItemStack item) {
+        if (item == null || item.getType() != INFINITY_FORGE_MATERIAL || !item.hasItemMeta()) {
+            return false;
+        }
+        return item.getItemMeta().getPersistentDataContainer().has(infinityForgeKey, PersistentDataType.BYTE);
     }
 }

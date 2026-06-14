@@ -26,6 +26,14 @@ public class FurnaceToolsPlugin implements CommandExecutor, TabCompleter {
         this.plugin = plugin;
     }
 
+    /**
+     * Tabela de fundição construída no {@link #register()}. Compartilhada com o
+     * plugin de encantamentos para que o Hexa também funda a área 3x3.
+     */
+    public FurnaceSmelting getSmelting() {
+        return smelting;
+    }
+
     public void register() {
         FurnaceToolItems.init(plugin);
 

@@ -15,11 +15,11 @@ import org.bukkit.Material;
  * (chave "machine_type", guarda o {@link #name()}) e o bloco base identifica visualmente.
  */
 public enum MachineType {
-    HARVESTER("colhetadeira", "Colhetadeira", ChatColor.GREEN, Material.HAY_BLOCK, 10, 100,
+    HARVESTER("colhetadeira", "Colhetadeira", ChatColor.GREEN, Material.DISPENSER, 10, 100,
             "Colhe plantações maduras (trigo, cenoura, batata,",
             "cana, fungo, etc.) num raio de 10 blocos e",
             "guarda a colheita aqui dentro."),
-    COMPACTOR("compactadora", "Compactadora", ChatColor.AQUA, Material.IRON_BLOCK, 10, 40,
+    COMPACTOR("compactadora", "Compactadora", ChatColor.AQUA, Material.DISPENSER, 10, 40,
             "Puxa o minério cru das mineradoras num raio de",
             "10 blocos e compacta em blocos aqui dentro.");
 

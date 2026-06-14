@@ -28,6 +28,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
+import skibidilandia.mcmmo.McmmoXp;
+
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -135,11 +137,23 @@ public class ElfBowListeners implements Listener {
         }
         // Salto direto (tecla 1-3): mantém o arco selecionado e dispara a habilidade.
         event.setCancelled(true);
+        if (!MineMagicItems.isAbilityUnlocked(bow, slot)) {
+            notifyLocked(player, bow, slot);
+            return;
+        }
         switch (slot) {
             case 0: activateExplosive(player); break;
             case 1: activateSpiral(player); break;
             default: castRain(player); break;
         }
+    }
+
+    /** Avisa que a habilidade da tecla {@code slot+1} ainda está bloqueada. */
+    private void notifyLocked(Player player, ItemStack item, int slot) {
+        player.sendActionBar(Component.text("Tecla " + (slot + 1) + " bloqueada ("
+                + MineMagicItems.abilityName(item, slot) + ") — funda uma Gema do Infinito na Forja.",
+                NamedTextColor.RED));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
     }
 
     /** Liga (ou renova) o buff de explosão + sangramento por {@link #BUFF_DURATION_MS}. */
@@ -261,8 +275,31 @@ public class ElfBowListeners implements Listener {
         }
         World world = arrow.getWorld();
         Location at = arrow.getLocation();
+
+        // Snapshot da vida dos seres vivos no raio do estouro. O mcMMO não dá XP de
+        // archery por dano de explosão, então creditamos manualmente proporcional ao
+        // dano que a explosão causar a cada um (delta de vida antes/depois).
+        Map<LivingEntity, Double> healthBefore = new HashMap<>();
+        if (shooter != null) {
+            for (LivingEntity le : world.getNearbyLivingEntities(at, EXPLOSION_POWER * 2.0D)) {
+                if (!le.equals(shooter)) {
+                    healthBefore.put(le, le.getHealth());
+                }
+            }
+        }
+
         // Explosão que fere quem está perto sem destruir o terreno nem atear fogo.
         world.createExplosion(at, EXPLOSION_POWER, false, false, shooter);
+
+        if (shooter != null) {
+            for (Map.Entry<LivingEntity, Double> entry : healthBefore.entrySet()) {
+                LivingEntity le = entry.getKey();
+                boolean dead = le.isDead() || !le.isValid();
+                double dealt = entry.getValue() - (dead ? 0.0D : le.getHealth());
+                McmmoXp.combat(shooter, le, "ARCHERY", dealt);
+            }
+        }
+
         if (hit instanceof LivingEntity) {
             applyBleed((LivingEntity) hit, shooter);
         }

@@ -46,6 +46,7 @@ public class GenerationTask extends BukkitRunnable {
             if (!world.isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)) {
                 return; // só gera com chunk carregado
             }
+            MinerItems.ensureLit(loc.getBlock()); // mantém a fornalha acesa
             int remaining = data.getTicksUntilNextCycle() - 20;
             if (remaining > 0) {
                 data.setTicksUntilNextCycle(remaining);

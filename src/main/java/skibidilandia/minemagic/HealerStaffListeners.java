@@ -95,6 +95,10 @@ public class HealerStaffListeners implements Listener {
         }
         // Salto direto (tecla 1/2/3): mantém o cajado e só escolhe a habilidade.
         event.setCancelled(true);
+        if (!MineMagicItems.isAbilityUnlocked(staff, slot)) {
+            notifyLocked(player, staff, slot);
+            return;
+        }
         if (slot == 2) {
             clearTargets(player, staff); // tecla 3: limpar alvos (não troca de modo)
             return;
@@ -126,6 +130,14 @@ public class HealerStaffListeners implements Listener {
             step += 9;
         }
         return Math.abs(step) == 1;
+    }
+
+    /** Avisa que a habilidade da tecla {@code slot+1} ainda está bloqueada. */
+    private void notifyLocked(Player player, ItemStack item, int slot) {
+        player.sendActionBar(Component.text("Tecla " + (slot + 1) + " bloqueada ("
+                + MineMagicItems.abilityName(item, slot) + ") — funda uma Gema do Infinito na Forja.",
+                NamedTextColor.RED));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
     }
 
     // =========================================================================

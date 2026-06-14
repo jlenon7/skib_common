@@ -32,5 +32,18 @@
             <version>26.1.2.build.69-stable</version>
             <scope>provided</scope>
         </dependency>
+        <!--
+            mcMMO: dependência só de compilação (o jar já está no servidor).
+            Usamos a ExperienceAPI para creditar XP de skills nas ações dos itens
+            customizados (quebras em massa, dano de explosão, armas arremessadas).
+            scope=system aponta direto para o jar do servidor, sem precisar de repo.
+        -->
+        <dependency>
+            <groupId>com.gmail.nossr50</groupId>
+            <artifactId>mcMMO</artifactId>
+            <version>2.2.053</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/../skibidilandia/plugins/mcMMO-2.2.053.jar</systemPath>
+        </dependency>
     </dependencies>
 </project>

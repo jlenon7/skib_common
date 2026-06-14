@@ -8,21 +8,28 @@ import org.bukkit.ChatColor;
  * Exceção: a NETHERITE não é acumulativa — gera um conjunto fixo (ver MinerGeneration).
  */
 public enum MinerTier {
-    COAL(1, "Mineradora de Carvão", ChatColor.DARK_GRAY),
-    COPPER(2, "Mineradora de Cobre", ChatColor.GOLD),
-    IRON(3, "Mineradora de Ferro", ChatColor.WHITE),
-    GOLD(4, "Mineradora de Ouro", ChatColor.YELLOW),
-    DIAMOND(5, "Mineradora de Diamante", ChatColor.AQUA),
-    NETHERITE(6, "Mineradora de Netherite", ChatColor.DARK_RED);
+    COAL(1, "Mineradora de Carvão", ChatColor.DARK_GRAY, "mineradora_carvao"),
+    COPPER(2, "Mineradora de Cobre", ChatColor.GOLD, "mineradora_cobre"),
+    IRON(3, "Mineradora de Ferro", ChatColor.WHITE, "mineradora_ferro"),
+    GOLD(4, "Mineradora de Ouro", ChatColor.YELLOW, "mineradora_ouro"),
+    DIAMOND(5, "Mineradora de Diamante", ChatColor.AQUA, "mineradora_diamante"),
+    NETHERITE(6, "Mineradora de Netherite", ChatColor.DARK_RED, "mineradora_netherite");
 
     private final int level;
     private final String displayName;
     private final ChatColor color;
+    private final String modelId;
 
-    MinerTier(int level, String displayName, ChatColor color) {
+    MinerTier(int level, String displayName, ChatColor color, String modelId) {
         this.level = level;
         this.displayName = displayName;
         this.color = color;
+        this.modelId = modelId;
+    }
+
+    /** Id do modelo no resource pack (namespace "skib"). */
+    public String getModelId() {
+        return modelId;
     }
 
     public int getLevel() {

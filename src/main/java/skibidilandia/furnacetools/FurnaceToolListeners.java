@@ -1,5 +1,7 @@
 package skibidilandia.furnacetools;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -8,6 +10,7 @@ import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -19,6 +22,8 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
+
+import skibidilandia.mcmmo.McmmoXp;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -107,7 +112,36 @@ public class FurnaceToolListeners implements Listener {
 
         // --- corte de árvore (só o machado, em troncos) ---
         if (fellsTree) {
-            fellTree(origin, tool, player, enabled);
+            boolean warned = FurnaceToolItems.isWarned(tool);
+            // Se o machado foi reparado depois do aviso, zera o estado.
+            if (warned && remainingRatio(tool) > 0.25) {
+                tool = FurnaceToolItems.setWarned(tool, false);
+                player.getInventory().setItemInMainHand(tool);
+                warned = false;
+            }
+
+            if (warned) {
+                // Segunda tentativa: o jogador foi avisado, agora o machado
+                // se despedaça de vez (não derruba a árvore neste golpe).
+                shatterInHand(player);
+                return;
+            }
+
+            boolean ranOut = fellTree(origin, tool, player, enabled);
+
+            if (ranOut) {
+                // Proteção: a árvore era grande demais para a durabilidade restante.
+                // Em vez de quebrar agora, deixamos a durabilidade num nível
+                // visivelmente vermelho (a barra ainda renderiza, ao contrário de
+                // 1 ponto, que some) e marcamos o aviso. Só no próximo corte é
+                // que o machado quebra de fato.
+                setRed(tool);
+                tool = FurnaceToolItems.setWarned(tool, true);
+                player.getInventory().setItemInMainHand(tool);
+                player.sendActionBar(Component.text("⚠ O machado quase quebrou! ", NamedTextColor.RED)
+                        .append(Component.text("Mais um corte e ele se quebra.", NamedTextColor.GOLD)));
+                player.playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+            }
         }
     }
 
@@ -117,8 +151,12 @@ public class FurnaceToolListeners implements Listener {
      * de quebra já cuidou dele. Cada tronco extra solta o mesmo que soltaria se
      * fosse quebrado normalmente (fundido se a auto-fundição estiver ligada) e
      * gasta durabilidade da ferramenta; ao "quebrar" o machado, o corte para.
+     *
+     * Retorna {@code true} se o corte parou por falta de durabilidade (árvore
+     * grande demais para o machado), e {@code false} se derrubou tudo ou parou
+     * no limite de segurança {@link #MAX_TREE_LOGS}.
      */
-    private void fellTree(Block origin, ItemStack tool, Player player, boolean enabled) {
+    private boolean fellTree(Block origin, ItemStack tool, Player player, boolean enabled) {
         Set<Block> visited = new HashSet<>();
         Deque<Block> queue = new ArrayDeque<>();
         visited.add(origin);
@@ -143,22 +181,27 @@ public class FurnaceToolListeners implements Listener {
                         // Gasta durabilidade antes de quebrar; se quebraria o machado, para.
                         if (!damageTool(tool, player)) {
                             player.getInventory().setItemInMainHand(tool);
-                            return;
+                            return true; // árvore grande demais para a durabilidade restante
                         }
+                        // Estado antes de quebrar: o mcMMO credita o XP de lenhador
+                        // que este corte (sem BlockBreakEvent) não daria sozinho.
+                        BlockState beforeCut = neighbor.getState();
                         List<ItemStack> drops = computeDrops(neighbor, tool, player, enabled);
                         neighbor.setType(Material.AIR); // dispara física: as folhas decaem sozinhas
                         dropAll(neighbor, drops);
+                        McmmoXp.blockBreak(player, beforeCut);
                         queue.add(neighbor);
                         felled++;
                         if (felled >= MAX_TREE_LOGS) {
                             player.getInventory().setItemInMainHand(tool);
-                            return;
+                            return false;
                         }
                     }
                 }
             }
         }
         player.getInventory().setItemInMainHand(tool);
+        return false;
     }
 
     /**
@@ -222,12 +265,53 @@ public class FurnaceToolListeners implements Listener {
         }
         Damageable damageable = (Damageable) meta;
         int newDamage = damageable.getDamage() + 1;
-        if (newDamage >= tool.getType().getMaxDurability()) {
-            return false; // quebraria o machado
+        // Reservamos 1 ponto: o vanilla ainda vai aplicar o golpe no bloco de
+        // origem depois deste evento. Sem essa folga, o corte esvaziaria a barra
+        // e o golpe de origem quebraria o machado "na hora".
+        if (newDamage >= tool.getType().getMaxDurability() - 1) {
+            return false; // levaria o machado à beira de quebrar
         }
         damageable.setDamage(newDamage);
         tool.setItemMeta(meta);
         return true;
+    }
+
+    /** Fração de durabilidade restante (1.0 = nova, 0.0 = quebrando). */
+    private static double remainingRatio(ItemStack tool) {
+        ItemMeta meta = tool.getItemMeta();
+        if (!(meta instanceof Damageable)) {
+            return 1.0;
+        }
+        int max = tool.getType().getMaxDurability();
+        if (max <= 0) {
+            return 1.0;
+        }
+        return (max - ((Damageable) meta).getDamage()) / (double) max;
+    }
+
+    /**
+     * Deixa a durabilidade num nível visivelmente vermelho (~10%). Em 1 ponto a
+     * barra arredonda para 0 pixels e some (parece cinza/normal); ~10% garante
+     * que ela ainda apareça, e bem no vermelho.
+     */
+    private static void setRed(ItemStack tool) {
+        ItemMeta meta = tool.getItemMeta();
+        if (!(meta instanceof Damageable)) {
+            return;
+        }
+        int max = tool.getType().getMaxDurability();
+        if (max <= 2) {
+            return;
+        }
+        int remaining = Math.max(2, Math.round(max * 0.10f));
+        ((Damageable) meta).setDamage(max - remaining);
+        tool.setItemMeta(meta);
+    }
+
+    /** Quebra o machado na mão: som de item quebrando e remove o item. */
+    private static void shatterInHand(Player player) {
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1.0f, 1.0f);
+        player.getInventory().setItemInMainHand(null);
     }
 
     /**

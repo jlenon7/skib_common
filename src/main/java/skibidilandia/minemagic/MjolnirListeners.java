@@ -25,6 +25,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
+import skibidilandia.mcmmo.McmmoXp;
+
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -302,7 +304,10 @@ public class MjolnirListeners implements Listener {
 
         for (Entity nearby : world.getNearbyEntities(loc, IMPACT_RADIUS, IMPACT_RADIUS, IMPACT_RADIUS)) {
             if (nearby instanceof LivingEntity && !nearby.equals(owner)) {
-                ((LivingEntity) nearby).damage(IMPACT_DAMAGE, owner);
+                LivingEntity victim = (LivingEntity) nearby;
+                victim.damage(IMPACT_DAMAGE, owner);
+                // Mjolnir arremessado: fora da mão, o mcMMO não atribui MACES sozinho.
+                McmmoXp.combat(owner, victim, "MACES", IMPACT_DAMAGE);
             }
         }
     }

@@ -43,6 +43,7 @@ public class MinerListeners implements Listener {
             return;
         }
         registry.add(event.getBlock().getLocation(), new MinerData(tier.getLevel()));
+        MinerItems.ensureLit(event.getBlock()); // acende a fornalha-mineradora
         event.getPlayer().sendMessage(ChatColor.GREEN + tier.getDisplayName()
                 + ChatColor.GRAY + " posicionada! Clique com o botão direito para abrir.");
     }

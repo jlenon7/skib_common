@@ -28,6 +28,8 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
 import org.bukkit.util.Vector;
 
+import skibidilandia.mcmmo.McmmoXp;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -131,6 +133,10 @@ public class WarriorSwordListeners implements Listener {
             return; // teclas 4-9: deixa trocar de item normalmente
         }
         event.setCancelled(true); // mantém a espada selecionada; a tecla só ativa a habilidade
+        if (!MineMagicItems.isAbilityUnlocked(sword, slot)) {
+            notifyLocked(player, sword, slot);
+            return;
+        }
         switch (slot) {
             case 0:
                 // Passa o slot e a espada já validada: durante o PlayerItemHeldEvent o
@@ -461,6 +467,9 @@ public class WarriorSwordListeners implements Listener {
                     trail(current, target.getLocation());
                     current = target.getLocation();
                     target.damage(IMPACT_DAMAGE, owner);
+                    // Espada arremessada: saiu da mão, então o mcMMO não atribui
+                    // SWORDS sozinho. Creditamos o XP do impacto manualmente.
+                    McmmoXp.combat(owner, target, "SWORDS", IMPACT_DAMAGE);
                     impactEffect(world, current);
                     returning = true;
                 } else if (hit != null && hit.getHitBlock() != null) {
@@ -552,6 +561,14 @@ public class WarriorSwordListeners implements Listener {
     private void sendCooldown(Player player, long remainingMs) {
         player.sendActionBar(Component.text("Recarregando... ", NamedTextColor.RED)
                 .append(Component.text(String.format("%.1fs", remainingMs / 1000.0), NamedTextColor.WHITE)));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
+    }
+
+    /** Avisa que a habilidade da tecla {@code slot+1} ainda está bloqueada. */
+    private void notifyLocked(Player player, ItemStack item, int slot) {
+        player.sendActionBar(Component.text("Tecla " + (slot + 1) + " bloqueada ("
+                + MineMagicItems.abilityName(item, slot) + ") — funda uma Gema do Infinito na Forja.",
+                NamedTextColor.RED));
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
     }
 

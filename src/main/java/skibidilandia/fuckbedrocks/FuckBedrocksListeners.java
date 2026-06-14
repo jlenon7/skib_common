@@ -43,6 +43,8 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
+import skibidilandia.mcmmo.McmmoXp;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -83,6 +85,12 @@ public class FuckBedrocksListeners implements Listener {
     private static final int MAX_IDLE_TICKS = 6;
     /** Alcance do raio de mira para confirmar que está mirando a bedrock. */
     private static final int REACH = 6;
+    /**
+     * XP de Mineração (mcMMO) por bedrock quebrada. A bedrock não tem valor na
+     * tabela do mcMMO (é inquebrável no vanilla), então creditamos um valor fixo —
+     * ~o de obsidiana, condizente com o esforço (~{@link #SWINGS_TO_BREAK} golpes).
+     */
+    private static final int BEDROCK_MINING_XP = 150;
 
     /** Sessão de mineração ativa por jogador. */
     private final Map<UUID, BedrockMining> mining = new HashMap<>();
@@ -222,6 +230,7 @@ public class FuckBedrocksListeners implements Listener {
             world.dropItemNaturally(at.clone().add(0.5, 0.5, 0.5), new ItemStack(Material.BEDROCK));
             world.playSound(at, Sound.BLOCK_STONE_BREAK, 1.0f, 0.6f);
             block.setType(Material.AIR);
+            McmmoXp.flatXp(player, "MINING", BEDROCK_MINING_XP); // a quebra não dispara BlockBreakEvent
             ItemStack updated = applyDamage(player.getInventory().getItemInMainHand(), player);
             player.getInventory().setItemInMainHand(updated);
         }

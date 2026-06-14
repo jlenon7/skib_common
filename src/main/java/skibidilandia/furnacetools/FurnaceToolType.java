@@ -13,16 +13,18 @@ import org.bukkit.Material;
  * {@link org.bukkit.block.Block#getDrops} com a própria ferramenta.
  */
 public enum FurnaceToolType {
-    PICKAXE(Material.IRON_PICKAXE, "Picareta da Fornalha"),
-    AXE(Material.IRON_AXE, "Machado da Fornalha"),
-    SHOVEL(Material.IRON_SHOVEL, "Pá da Fornalha");
+    PICKAXE(Material.IRON_PICKAXE, "Picareta da Fornalha", "picareta_fornalha"),
+    AXE(Material.IRON_AXE, "Machado da Fornalha", "machado_fornalha"),
+    SHOVEL(Material.IRON_SHOVEL, "Pá da Fornalha", "pa_fornalha");
 
     private final Material material;
     private final String displayName;
+    private final String modelId;
 
-    FurnaceToolType(Material material, String displayName) {
+    FurnaceToolType(Material material, String displayName, String modelId) {
         this.material = material;
         this.displayName = displayName;
+        this.modelId = modelId;
     }
 
     public Material getMaterial() {
@@ -31,6 +33,11 @@ public enum FurnaceToolType {
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    /** Id do modelo no resource pack (namespace "skib"). */
+    public String getModelId() {
+        return modelId;
     }
 
     /** Resolve o tipo a partir do nome guardado no PDC, ou null se inválido. */

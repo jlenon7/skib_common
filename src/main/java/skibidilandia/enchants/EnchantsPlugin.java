@@ -10,6 +10,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import skibidilandia.furnacetools.FurnaceSmelting;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -23,16 +25,18 @@ import java.util.List;
 public class EnchantsPlugin implements CommandExecutor, TabCompleter {
 
     private final JavaPlugin plugin;
+    private final FurnaceSmelting smelting;
 
-    public EnchantsPlugin(JavaPlugin plugin) {
+    public EnchantsPlugin(JavaPlugin plugin, FurnaceSmelting smelting) {
         this.plugin = plugin;
+        this.smelting = smelting;
     }
 
     public void register() {
         EnchantsItems.init(plugin);
 
         plugin.getServer().getPluginManager()
-                .registerEvents(new EnchantsListeners(plugin), plugin);
+                .registerEvents(new EnchantsListeners(plugin, smelting), plugin);
 
         if (plugin.getCommand("enchants") != null) {
             plugin.getCommand("enchants").setExecutor(this);

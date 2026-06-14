@@ -108,6 +108,12 @@ public class AssassinListeners implements Listener {
     private static final double EXECUTION_DAMAGE_FACTOR = 0.75D; // fração do dano acumulado vira explosão
     private static final double EXECUTION_AOE_RADIUS = 3.0D;   // respingo nos inimigos próximos
 
+    // --- Sangramento (chance em acertos com as adagas) ---
+    private static final double BLEED_CHANCE = 0.20D;            // 20% por acerto
+    private static final double BLEED_DAMAGE_PER_TICK = 1.0D;    // 0,5 coração por aplicação
+    private static final long BLEED_INTERVAL_TICKS = 10L;        // 0,5s entre aplicações
+    private static final int BLEED_APPLICATIONS = 5;             // 5 aplicações (~2,5s, 2,5 corações)
+
     private final JavaPlugin plugin;
     private final Random random = new Random();
 
@@ -126,6 +132,15 @@ public class AssassinListeners implements Listener {
     private final Map<UUID, ShadowClone> specialClones = new HashMap<>();
     /** Marca de execução ativa, por alvo (UUID da entidade marcada). */
     private final Map<UUID, ExecutionMark> marks = new HashMap<>();
+    /** Sangramento ativo, por alvo (UUID da entidade que sangra). */
+    private final Map<UUID, Bleed> bleeds = new HashMap<>();
+
+    /**
+     * True enquanto este listener aplica dano próprio (adagas, tornado, execução,
+     * sangramento). O handler de melee usa isso para não re-rolar sangramento sobre
+     * o dano que nós mesmos causamos — só os golpes corpo-a-corpo de verdade rolam.
+     */
+    private boolean dealingCustomDamage = false;
 
     public AssassinListeners(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -158,6 +173,10 @@ public class AssassinListeners implements Listener {
         }
         // Salto direto (tecla 1/2/3/4): mantém as adagas e dispara a habilidade.
         event.setCancelled(true);
+        if (!MineMagicItems.isAbilityUnlocked(daggers, slot)) {
+            notifyLocked(player, daggers, slot);
+            return;
+        }
         switch (slot) {
             case 0:
                 throwDaggersAbility(player);
@@ -252,10 +271,9 @@ public class AssassinListeners implements Listener {
                     FluidCollisionMode.NEVER, true, DAGGER_HIT_SIZE, e -> isEnemy(e, ownerId));
             if (hit != null && hit.getHitEntity() instanceof LivingEntity) {
                 LivingEntity victim = (LivingEntity) hit.getHitEntity();
+                dealCustomDamage(victim, DAGGER_DAMAGE, owner);
                 if (owner != null) {
-                    victim.damage(DAGGER_DAMAGE, owner);
-                } else {
-                    victim.damage(DAGGER_DAMAGE);
+                    tryApplyBleed(victim, owner);
                 }
                 world.spawnParticle(Particle.CRIT, victim.getLocation().add(0, 1, 0), 12, 0.2, 0.3, 0.2, 0.3);
                 world.playSound(victim.getLocation(), Sound.ITEM_TRIDENT_HIT, 0.8f, 1.4f);
@@ -345,11 +363,7 @@ public class AssassinListeners implements Listener {
                 continue;
             }
             LivingEntity victim = (LivingEntity) e;
-            if (owner != null) {
-                victim.damage(TORNADO_PULSE_DAMAGE, owner);
-            } else {
-                victim.damage(TORNADO_PULSE_DAMAGE);
-            }
+            dealCustomDamage(victim, TORNADO_PULSE_DAMAGE, owner);
             Vector push = victim.getLocation().toVector().subtract(center.toVector()).setY(0);
             if (push.lengthSquared() > 1.0e-6D) {
                 push.normalize().multiply(TORNADO_PUSH).setY(TORNADO_LIFT);
@@ -725,10 +739,111 @@ public class AssassinListeners implements Listener {
         }
 
         private void damageMarked(LivingEntity victim, double amount, Player owner) {
+            dealCustomDamage(victim, amount, owner);
+        }
+    }
+
+    // =========================================================================
+    //  Sangramento
+    // =========================================================================
+
+    /**
+     * Aplica dano deste listener (adagas/tornado/execução/sangramento) marcando o
+     * golpe como "nosso", para o handler de melee não tratá-lo como uma estocada
+     * corpo-a-corpo e re-rolar sangramento sobre ele.
+     */
+    private void dealCustomDamage(LivingEntity victim, double amount, Player owner) {
+        dealingCustomDamage = true;
+        try {
             if (owner != null) {
                 victim.damage(amount, owner);
             } else {
                 victim.damage(amount);
+            }
+        } finally {
+            dealingCustomDamage = false;
+        }
+    }
+
+    /** Acerto corpo-a-corpo com as adagas: rola a chance de aplicar sangramento. */
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDaggerMelee(EntityDamageByEntityEvent event) {
+        if (dealingCustomDamage) {
+            return; // dano nosso (incl. o tick de sangramento): não re-rola bleed
+        }
+        if (!(event.getDamager() instanceof Player)) {
+            return;
+        }
+        Player attacker = (Player) event.getDamager();
+        if (!MineMagicItems.isAssassinDaggers(attacker.getInventory().getItemInMainHand())) {
+            return;
+        }
+        Entity victim = event.getEntity();
+        if (!(victim instanceof LivingEntity) || victim instanceof ArmorStand) {
+            return;
+        }
+        tryApplyBleed((LivingEntity) victim, attacker);
+    }
+
+    /** Rola {@link #BLEED_CHANCE} e, se sair, aplica (ou renova) o sangramento no alvo. */
+    private void tryApplyBleed(LivingEntity victim, Player owner) {
+        if (owner == null || victim == null || !victim.isValid() || victim.isDead()) {
+            return;
+        }
+        if (random.nextDouble() >= BLEED_CHANCE) {
+            return;
+        }
+        UUID tid = victim.getUniqueId();
+        Bleed existing = bleeds.get(tid);
+        if (existing != null) {
+            existing.refresh(owner.getUniqueId());
+            return;
+        }
+        Bleed bleed = new Bleed(tid, owner.getUniqueId());
+        bleeds.put(tid, bleed);
+        bleed.runTaskTimer(plugin, BLEED_INTERVAL_TICKS, BLEED_INTERVAL_TICKS);
+        World world = victim.getWorld();
+        world.playSound(victim.getLocation(), Sound.ENTITY_PLAYER_HURT, 0.7f, 1.2f);
+    }
+
+    /**
+     * Sangramento: dano periódico ao longo de {@link #BLEED_APPLICATIONS} aplicações.
+     * Renova a duração se reaplicado e credita o dono para fins de abate.
+     */
+    private final class Bleed extends BukkitRunnable {
+        private final UUID targetId;
+        private UUID ownerId;
+        private int remaining = BLEED_APPLICATIONS;
+
+        Bleed(UUID targetId, UUID ownerId) {
+            this.targetId = targetId;
+            this.ownerId = ownerId;
+        }
+
+        /** Renova a duração e atualiza quem causou o sangramento. */
+        void refresh(UUID ownerId) {
+            this.ownerId = ownerId;
+            this.remaining = BLEED_APPLICATIONS;
+        }
+
+        @Override
+        public void run() {
+            Entity e = plugin.getServer().getEntity(targetId);
+            if (!(e instanceof LivingEntity) || e.isDead() || !e.isValid()) {
+                bleeds.remove(targetId, this);
+                cancel();
+                return;
+            }
+            LivingEntity target = (LivingEntity) e;
+            World world = target.getWorld();
+            Location loc = target.getLocation().add(0, 1.0, 0);
+            world.spawnParticle(Particle.DUST, loc, 10, 0.3, 0.4, 0.3, 0.0,
+                    new Particle.DustOptions(Color.fromRGB(140, 0, 0), 1.2f));
+            dealCustomDamage(target, BLEED_DAMAGE_PER_TICK, Bukkit.getPlayer(ownerId));
+            remaining--;
+            if (remaining <= 0) {
+                bleeds.remove(targetId, this);
+                cancel();
             }
         }
     }
@@ -841,6 +956,14 @@ public class AssassinListeners implements Listener {
         player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
     }
 
+    /** Avisa que a habilidade da tecla {@code slot+1} ainda está bloqueada. */
+    private void notifyLocked(Player player, ItemStack item, int slot) {
+        player.sendActionBar(Component.text("Tecla " + (slot + 1) + " bloqueada ("
+                + MineMagicItems.abilityName(item, slot) + ") — funda uma Gema do Infinito na Forja.",
+                NamedTextColor.RED));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6f, 0.6f);
+    }
+
     // =========================================================================
     //  Limpeza
     // =========================================================================
@@ -872,6 +995,14 @@ public class AssassinListeners implements Listener {
                 marks.remove(entry.getKey());
             }
         }
+        // Idem para os sangramentos.
+        for (Map.Entry<UUID, Bleed> entry : new ArrayList<>(bleeds.entrySet())) {
+            Bleed bleed = entry.getValue();
+            if (entry.getKey().equals(id) || bleed.ownerId.equals(id)) {
+                bleed.cancel();
+                bleeds.remove(entry.getKey());
+            }
+        }
     }
 
     private void forgetClone(ShadowClone clone) {
@@ -893,7 +1024,11 @@ public class AssassinListeners implements Listener {
         for (ExecutionMark mark : new ArrayList<>(marks.values())) {
             mark.cancel();
         }
+        for (Bleed bleed : new ArrayList<>(bleeds.values())) {
+            bleed.cancel();
+        }
         marks.clear();
+        bleeds.clear();
         throwClones.clear();
         specialClones.clear();
         purgeAllClones();

@@ -38,7 +38,7 @@ public class SkibCommon extends JavaPlugin {
         mineMagicPlugin = new MineMagicPlugin(this);
         mineMagicPlugin.register();
 
-        EnchantsPlugin enchantsPlugin = new EnchantsPlugin(this);
+        EnchantsPlugin enchantsPlugin = new EnchantsPlugin(this, furnaceToolsPlugin.getSmelting());
         enchantsPlugin.register();
     }
 

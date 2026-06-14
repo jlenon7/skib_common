@@ -9,6 +9,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import skibidilandia.SkibModel;
 
 import java.util.Arrays;
 
@@ -59,6 +60,7 @@ public final class FuckBedrocksItems {
         ));
         meta.getPersistentDataContainer().set(pickaxeKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "picareta_bedrock");
         return item;
     }
 
@@ -84,6 +86,7 @@ public final class FuckBedrocksItems {
         ));
         meta.getPersistentDataContainer().set(nukeKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "nuke_tnt");
         return item;
     }
 
@@ -112,6 +115,7 @@ public final class FuckBedrocksItems {
         ));
         meta.getPersistentDataContainer().set(nukeKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
+        SkibModel.apply(item, "carrinho_nuke");
         return item;
     }
 

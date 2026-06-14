@@ -7,6 +7,7 @@ import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
+import skibidilandia.SkibModel;
 
 import java.util.Arrays;
 
@@ -20,6 +21,7 @@ public final class FurnaceToolItems {
 
     private static NamespacedKey typeKey;
     private static NamespacedKey enabledKey;
+    private static NamespacedKey warnedKey;
 
     private FurnaceToolItems() {
     }
@@ -27,6 +29,7 @@ public final class FurnaceToolItems {
     public static void init(JavaPlugin plugin) {
         typeKey = new NamespacedKey(plugin, "furnace_tool_type");
         enabledKey = new NamespacedKey(plugin, "furnace_tool_enabled");
+        warnedKey = new NamespacedKey(plugin, "furnace_tool_warned");
     }
 
     /** Constrói a ferramenta da fornalha de um tipo (base de ferro, sem encantos, ligada). */
@@ -38,6 +41,7 @@ public final class FurnaceToolItems {
         meta.getPersistentDataContainer().set(enabledKey, PersistentDataType.BYTE, (byte) 1);
         applyLore(meta, true);
         item.setItemMeta(meta);
+        SkibModel.apply(item, type.getModelId());
         return item;
     }
 
@@ -70,6 +74,31 @@ public final class FurnaceToolItems {
         ItemMeta meta = item.getItemMeta();
         meta.getPersistentDataContainer().set(enabledKey, PersistentDataType.BYTE, (byte) (enabled ? 1 : 0));
         applyLore(meta, enabled);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /**
+     * Se o machado já recebeu o aviso de "quase quebrando". Quando marcado, o
+     * próximo corte de árvore deixa o vanilla dar o golpe final e quebrá-lo.
+     */
+    public static boolean isWarned(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return false;
+        }
+        Byte value = item.getItemMeta().getPersistentDataContainer()
+                .get(warnedKey, PersistentDataType.BYTE);
+        return value != null && value != 0;
+    }
+
+    /** Marca/desmarca o aviso de "quase quebrando" e devolve o item modificado. */
+    public static ItemStack setWarned(ItemStack item, boolean warned) {
+        ItemMeta meta = item.getItemMeta();
+        if (warned) {
+            meta.getPersistentDataContainer().set(warnedKey, PersistentDataType.BYTE, (byte) 1);
+        } else {
+            meta.getPersistentDataContainer().remove(warnedKey);
+        }
         item.setItemMeta(meta);
         return item;
     }
